@@ -1,0 +1,16 @@
+Makefile
+Makefile.in
+acinclude.m4
+aclocal.m4
+autom4te.cache/
+build-aux/
+config.h
+config.h.in
+config.h.in~
+config.log
+config.status
+configure
+libtool
+priv/.deps/
+src/emonk.app.tpl
+stamp-h1

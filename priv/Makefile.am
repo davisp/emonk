@@ -1,4 +1,4 @@
-## Licensed under the Apache License, Version 2.0 (the "License"); you may not
+
 ## use this file except in compliance with the License. You may obtain a copy of
 ## the License at
 ##
@@ -19,9 +19,9 @@ EMONK_SRCS = \
 	spidermonkey.c \
 	spidermonkey_drv.c
 
-couchprivlib_LTLIBRARIES = emonk_drv.la
-couch_icu_driver_la_SOURCES = $(EMONK_SRCS)
-couch_icu_driver_la_LDFLAGS = -module -avoid-version
+emonkprivlib_LTLIBRARIES = emonk_drv.la
+emonk_drv_la_SOURCES = $(EMONK_SRCS)
+emonk_drv_la_LDFLAGS = -module -avoid-version
 
 install-data-hook:
 	if test -f "$(DESTDIR)$(emonkprivlibdir)/emonk_drv"; then \

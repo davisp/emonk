@@ -51,7 +51,7 @@ else
     libtoolize -f -c --automake
 fi
 
-aclocal -I m4
+aclocal
 autoheader -f
 automake -f -c -a --gnits 2>&1 | sed -e "/install/d"
 autoconf -f

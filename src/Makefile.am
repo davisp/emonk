@@ -39,7 +39,6 @@ emonk.app: emonk.app.tpl
 	modules=`find . -name "*.erl" -exec basename {} .erl \; | tr '\n' ',' | sed "s/,$$//"`; \
 	sed -e "s|%modules%|$$modules|g" $@ < $<
 	chmod +x $@
-endif
 
 %.beam: %.erl
 	$(ERLC) $(ERLC_FLAGS) $<;
