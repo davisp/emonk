@@ -1,0 +1,7 @@
+Emonk 0.0.1
+===========
+
+  * Refactoring original erlang_js package.
+    + Completely rewriting the build system.
+    + Removing packaged source dependencies.
+    + Rewriting the Erlang - JavaScript communication.
