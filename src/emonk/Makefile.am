@@ -10,36 +10,35 @@
 ## License for the specific language governing permissions and limitations under
 ## the License.
 
-emonklibdir = $(localerlanglibdir)/emonk-$(version)
-#emonkincludedir = $(emonklibdir)/include
-emonkebindir = $(emonklibdir)/ebin
+SUBDIRS = priv
 
-#emonkinclude_DATA = emonk.hrl
+emonklibdir = $(localerlanglibdir)/emonk-$(version)
+emonkebindir = $(emonklibdir)/ebin
 emonkebin_DATA = $(compiled_files)
 
-CLEANFILES = $(compiled_files)
-
 source_files = \
-	emonk.app.in \
-	emonk.erl \
-	emonk_sup.erl \
-	emonk_cache.erl \
-	emonk_driver.erl
-
-EXTRA_DIST = $(source_files)
+	src/emonk.app.in \
+	src/emonk.erl \
+	src/emonk_sup.erl \
+	src/emonk_cache.erl \
+	src/emonk_driver.erl
 
 compiled_files = \
-	emonk.app \
-	emonk.beam \
-	emonk_sup.beam \
-	emonk_cache.beam \
-	emonk_driver.beam
+	ebin/emonk.app \
+	ebin/emonk.beam \
+	ebin/emonk_sup.beam \
+	ebin/emonk_cache.beam \
+	ebin/emonk_driver.beam
 
-emonk.app: emonk.app.tpl
-	modules=`find . -name "*.erl" -exec basename {} .erl \; | tr '\n' ',' | sed "s/,$$//"`; \
+EXTRA_DIST = $(source_files)
+CLEANFILES = $(compiled_files)
+
+ebin/emonk.app: src/emonk.app.tpl
+	modules=`find ./src -name "*.erl" -exec basename {} .erl \; | tr '\n' ',' | sed "s/,$$//"`; \
 	sed -e "s|%modules%|$$modules|g" $@ < $<
 	chmod +x $@
 
-%.beam: %.erl
+ebin/%.beam: src/%.erl
+	@mkdir -p ebin
 	$(ERLC) $(ERLC_FLAGS) $<;
 

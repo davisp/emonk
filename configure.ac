@@ -209,9 +209,9 @@ AC_SUBST(abs_top_builddir)
 AC_REVISION([LOCAL_VERSION])
 
 AC_CONFIG_FILES([Makefile])
-AC_CONFIG_FILES([priv/Makefile])
-AC_CONFIG_FILES([src/Makefile])
-AC_CONFIG_FILES([src/emonk.app.tpl])
+AC_CONFIG_FILES([src/emonk/Makefile])
+AC_CONFIG_FILES([src/emonk/priv/Makefile])
+AC_CONFIG_FILES([src/emonk/src/emonk.app.tpl])
 
 AC_OUTPUT
 
