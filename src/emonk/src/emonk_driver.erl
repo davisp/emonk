@@ -13,22 +13,15 @@
 %%    See the License for the specific language governing permissions and
 %%    limitations under the License.
 
-%% @doc This module manages all of the low-level details surrounding the
-%% linked-in driver. It is reponsible for loading and unloading the driver
-%% as needed. This module is also reponsible for creating and destroying
-%% instances of Javascript VMs.
-
 -module(emonk_driver).
 
--export([load_driver/0, new/0, new/1, destroy/1, shutdown/1]).
+-export([start/0, new/0, new/1, destroy/1, shutdown/1]).
 -export([define_js/2, define_js/3, eval_js/2, eval_js/3]).
 
 -define(SCRIPT_TIMEOUT, 5000).
--define(DRIVER_NAME, "spidermonkey_drv").
+-define(DRIVER_NAME, "emonk_drv").
 
-%% @spec load_driver() -> true | false
-%% @doc Attempt to load the Javascript driver
-load_driver() ->
+start() ->
     {ok, Drivers} = erl_ddll:loaded_drivers(),
     case lists:member(?DRIVER_NAME, Drivers) of
         false ->
@@ -36,8 +29,7 @@ load_driver() ->
                 ok ->
                     true;
                 {error, Error} ->
-                    error_logger:error_msg("Error loading ~p: ~p~n", [?DRIVER_NAME, erl_ddll:format_error(Error)]),
-                    false
+                    {error, {?DRIVER_NAME, erl_ddll:format_error(Error)}}
             end;
         true ->
             true

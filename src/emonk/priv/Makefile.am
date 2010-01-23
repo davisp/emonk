@@ -14,18 +14,22 @@ emonklibdir = $(localerlanglibdir)/emonk-$(version)
 emonkprivdir = $(emonk)/priv
 emonkprivlibdir = $(emonk)/priv/lib
 
-EMONK_SRCS = \
-	driver_comm.c \
-	spidermonkey.c \
-	spidermonkey_drv.c
+#EMONK_SRCS = \
+#	driver_comm.c \
+#	spidermonkey.c \
+#	spidermonkey_drv.c
+
+EMONK_SRCS = test.c
 
 emonkprivlib_LTLIBRARIES = emonk_drv.la
 emonk_drv_la_SOURCES = $(EMONK_SRCS)
 emonk_drv_la_LDFLAGS = -module -avoid-version
+emonk_drv_la_LIBADD = @JSLIB@ -lnspr4
 
 check: emonk_drv.so
 emonk_drv.so: emonk_drv.la
-	$(LN_S) .libs/emonk_drv.so emonk_drv.so
+	@rm -f $@
+	$(LN_S) .libs/emonk_drv.so $@
 
 install-data-hook:
 	if test -f "$(DESTDIR)$(emonkprivlibdir)/emonk_drv"; then \

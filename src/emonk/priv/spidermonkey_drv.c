@@ -34,7 +34,7 @@ static ErlDrvData start(ErlDrvPort port, char *cmd);
 static void stop(ErlDrvData handle);
 static void process(ErlDrvData handle, ErlIOVec *ev);
 
-static ErlDrvEntry spidermonkey_drv_entry = {
+static ErlDrvEntry emonk_drv_entry = {
     NULL,                             /* init */
     start,                            /* startup */
     stop,                             /* shutdown */
@@ -93,8 +93,8 @@ static void unknown_command(spidermonkey_drv_t *dd, const char *call_id) {
   send_output(dd->port, terms, sizeof(terms) / sizeof(terms[0]));
 }
 
-DRIVER_INIT(spidermonkey_drv) {
-  return &spidermonkey_drv_entry;
+DRIVER_INIT(emonk_drv) {
+  return &emonk_drv_entry;
 }
 
 static ErlDrvData start(ErlDrvPort port, char *cmd) {

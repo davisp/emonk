@@ -29,3 +29,4 @@ src/emonk/priv/*.lo
 src/emonk/priv/emonk_drv.so
 src/emonk/priv/.deps/
 src/emonk/priv/.libs/
+test/run

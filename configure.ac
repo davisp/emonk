@@ -29,22 +29,6 @@ AC_PROG_CC
 AC_PROG_LIBTOOL
 AC_PROG_LN_S
 
-AC_MSG_CHECKING([for pthread_create in -lpthread])
-
-original_LIBS="$LIBS"
-LIBS="-lpthread $original_LIBS"
-
-AC_TRY_LINK([#include<pthread.h>],
-    [pthread_create((void *)0, (void *)0, (void *)0, (void *)0)],
-    [pthread=yes], [pthread=no])
-
-if test x${pthread} = xyes; then
-    AC_MSG_RESULT([yes])
-else
-    LIBS="$original_LIBS"
-    AC_MSG_RESULT([no])
-fi
-
 AC_ARG_WITH([erlang], [AC_HELP_STRING([--with-erlang=PATH],
     [set PATH to the Erlang include directory])], [
     ERLANG_FLAGS="-I$withval"
@@ -212,6 +196,8 @@ AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([src/emonk/Makefile])
 AC_CONFIG_FILES([src/emonk/priv/Makefile])
 AC_CONFIG_FILES([src/emonk/src/emonk.app.tpl])
+AC_CONFIG_FILES([src/etap/Makefile])
+AC_CONFIG_FILES([test/Makefile])
 
 AC_OUTPUT
 
