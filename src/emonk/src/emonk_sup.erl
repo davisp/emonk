@@ -15,7 +15,7 @@
 
 %% @doc Top level supervisor for erlang_js. It is chiefly responsible for
 %% the js_cache file cache process.
--module(erlang_js_sup).
+-module(emonk_sup).
 
 -behaviour(supervisor).
 

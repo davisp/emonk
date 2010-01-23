@@ -34,11 +34,11 @@ EXTRA_DIST = $(source_files)
 CLEANFILES = $(compiled_files)
 
 ebin/emonk.app: src/emonk.app.tpl
+	@mkdir -p ebin
 	modules=`find ./src -name "*.erl" -exec basename {} .erl \; | tr '\n' ',' | sed "s/,$$//"`; \
-	sed -e "s|%modules%|$$modules|g" $@ < $<
-	chmod +x $@
+	sed -e "s|%modules%|$$modules|g" > $@ < $<
 
 ebin/%.beam: src/%.erl
 	@mkdir -p ebin
-	$(ERLC) $(ERLC_FLAGS) $<;
+	$(ERLC) $(ERLC_FLAGS) -o ./ebin/ $<;
 

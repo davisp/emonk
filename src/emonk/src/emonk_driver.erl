@@ -18,7 +18,7 @@
 %% as needed. This module is also reponsible for creating and destroying
 %% instances of Javascript VMs.
 
--module(js_driver).
+-module(emonk_driver).
 
 -export([load_driver/0, new/0, new/1, destroy/1, shutdown/1]).
 -export([define_js/2, define_js/3, eval_js/2, eval_js/3]).

@@ -1,3 +1,4 @@
+# Configure Related
 Makefile
 Makefile.in
 acinclude.m4
@@ -12,5 +13,19 @@ config.status
 configure
 libtool
 priv/.deps/
-src/emonk.app.tpl
+src/emonk/src/emonk.app.tpl
 stamp-h1
+
+# Build Related
+AUTHORS.gz
+BUGS.gz
+CHANGES.gz
+NEWS.gz
+README.gz
+THANKS.gz
+src/emonk/ebin/
+src/emonk/priv/*.la
+src/emonk/priv/*.lo
+src/emonk/priv/emonk_drv.so
+src/emonk/priv/.deps/
+src/emonk/priv/.libs/

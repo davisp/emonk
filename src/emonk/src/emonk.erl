@@ -14,7 +14,7 @@
 %%    limitations under the License.
 
 %% @ doc This module is the entry point to start erlang_js as an OTP application.
--module(erlang_js).
+-module(emonk).
 
 -behaviour(application).
 

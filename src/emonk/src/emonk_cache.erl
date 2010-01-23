@@ -17,7 +17,7 @@
 %% files used to initialize each Javascript context. This is helpful because
 %% it prevents erlang_js from accessing the filesystem more than necessary.
 
--module(js_cache).
+-module(emonk_cache).
 
 -behaviour(gen_server).
 

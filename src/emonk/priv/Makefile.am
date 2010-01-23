@@ -23,6 +23,10 @@ emonkprivlib_LTLIBRARIES = emonk_drv.la
 emonk_drv_la_SOURCES = $(EMONK_SRCS)
 emonk_drv_la_LDFLAGS = -module -avoid-version
 
+check: emonk_drv.so
+emonk_drv.so: emonk_drv.la
+	$(LN_S) .libs/emonk_drv.so emonk_drv.so
+
 install-data-hook:
 	if test -f "$(DESTDIR)$(emonkprivlibdir)/emonk_drv"; then \
 	    rm -f "$(DESTDIR)$(emonkprivlibdir)/emonk_drv.so"; \
