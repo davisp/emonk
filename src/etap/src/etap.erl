@@ -401,8 +401,6 @@ start_etap_server() ->
 test_server(State) ->
     NewState = receive
         {_From, plan, unknown} ->
-            io:format("# Current time local ~s~n", [datetime(erlang:localtime())]),
-            io:format("# Using etap version ~p~n", [ proplists:get_value(vsn, proplists:get_value(attributes, etap:module_info())) ]),
             State#test_state{
                 planned = -1,
                 count = 0,
@@ -412,8 +410,6 @@ test_server(State) ->
                 skip_reason = ""
             };
         {_From, plan, N} ->
-            io:format("# Current time local ~s~n", [datetime(erlang:localtime())]),
-            io:format("# Using etap version ~p~n", [ proplists:get_value(vsn, proplists:get_value(attributes, etap:module_info())) ]),
             io:format("1..~p~n", [N]),
             State#test_state{
                 planned = N,

@@ -18,11 +18,17 @@
 
 #include "spidermonkey.h"
 
-/* The class of the global object. */
 static JSClass global_class = {
-    "global", JSCLASS_GLOBAL_FLAGS,
-    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+    "global",
+    JSCLASS_GLOBAL_FLAGS,
+    JS_PropertyStub,
+    JS_PropertyStub,
+    JS_PropertyStub,
+    JS_PropertyStub,
+    JS_EnumerateStub,
+    JS_ResolveStub,
+    JS_ConvertStub,
+    JS_FinalizeStub,
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
 

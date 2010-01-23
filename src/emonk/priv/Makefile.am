@@ -14,12 +14,10 @@ emonklibdir = $(localerlanglibdir)/emonk-$(version)
 emonkprivdir = $(emonk)/priv
 emonkprivlibdir = $(emonk)/priv/lib
 
-#EMONK_SRCS = \
-#	driver_comm.c \
-#	spidermonkey.c \
-#	spidermonkey_drv.c
-
-EMONK_SRCS = test.c
+EMONK_SRCS = \
+    emonk_drv.c \
+	driver_comm.c \
+	spidermonkey.c
 
 emonkprivlib_LTLIBRARIES = emonk_drv.la
 emonk_drv_la_SOURCES = $(EMONK_SRCS)

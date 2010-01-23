@@ -74,52 +74,34 @@ CPPFLAGS="$FLAGS $CPPFLAGS"
 # manually linking libm is requred for FreeBSD 7.0
 LDFLAGS="$FLAGS -lm $LDFLAGS"
 
+AC_CHECK_LIB([nspr4], [PR_VersionCheck], [NSPR_LIB_BASE=nspr4], [
+    AC_MSG_ERROR([Could not find the nspr4 library.
+
+Is the Mozilla NSPR library installed?])])
+JSLIB=-l$NSPR_LIB_BASE
+
 AC_CHECK_LIB([mozjs], [JS_NewContext], [JS_LIB_BASE=mozjs], [
-    AC_CHECK_LIB([js], [JS_NewContext], [JS_LIB_BASE=js], [
-        AC_CHECK_LIB([js3250], [JS_NewContext], [JS_LIB_BASE=js3250], [
-            AC_CHECK_LIB([js32], [JS_NewContext], [JS_LIB_BASE=js32], [
-                AC_MSG_ERROR([Could not find the js library.
+    AC_MSG_ERROR([Could not find the js library.
 
-Is the Mozilla SpiderMonkey library installed?])])])])])
+Is the Mozilla SpiderMonkey library installed?])])
 
-AC_SUBST(JS_LIB_BASE)
 JSLIB=-l$JS_LIB_BASE
 
 AC_CHECK_HEADER([jsapi.h], [], [
-    AC_CHECK_HEADER([js/jsapi.h],
-        [CPPFLAGS="$CPPFLAGS -I$JS_INCLUDE/js"],
-        [
-            AC_MSG_ERROR([Could not find the jsapi header.
+    AC_CHECK_HEADER([js/jsapi.h], [CPPFLAGS="$CPPFLAGS -I$JS_INCLUDE/js"], [
+        AC_MSG_ERROR([Could not find the jsapi header.
 
-Are the Mozilla SpiderMonkey headers installed?])
-        ])])
+Are the Mozilla SpiderMonkey headers installed?])])])
 
+AC_SUBST(NSPR_LIB_BASE)
+AC_SUBST(NSPRLIB)
+AC_SUBST(JS_LIB_BASE)
 AC_SUBST(JSLIB)
-
-AC_LANG_PUSH(C)
-OLD_CFLAGS="$CFLAGS"
-CFLAGS="-Werror-implicit-function-declaration"
-AC_COMPILE_IFELSE(
-    [AC_LANG_PROGRAM(
-        [[#include <jsapi.h>]],
-        [[JS_SetOperationCallback(0, 0);]]
-    )],
-    AC_DEFINE([USE_JS_SETOPCB], [], [Use new JS_SetOperationCallback])
-)
-CFLAGS="$OLD_CFLAGS"
-AC_LANG_POP(C)
 
 case "$(uname -s)" in
   Linux)
-    LIBS="$LIBS -lcrypt"
     CPPFLAGS="-D_XOPEN_SOURCE $CPPFLAGS"
     ;;
-  FreeBSD)
-    LIBS="$LIBS -lcrypt"
-    ;;
-  OpenBSD)
-    LIBS="$LIBS -lcrypto"
-  ;;
 esac
 
 AC_PATH_PROG([ERL], [erl])

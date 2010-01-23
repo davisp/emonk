@@ -15,17 +15,17 @@
 
 -module(emonk_driver).
 
--export([start/0, new/0, new/1, destroy/1, shutdown/1]).
--export([define_js/2, define_js/3, eval_js/2, eval_js/3]).
+-export([start/0, new/0, destroy/1, shutdown/1]).
 
 -define(SCRIPT_TIMEOUT, 5000).
 -define(DRIVER_NAME, "emonk_drv").
+-define(PORT_OPTS, [binary]).
 
 start() ->
     {ok, Drivers} = erl_ddll:loaded_drivers(),
     case lists:member(?DRIVER_NAME, Drivers) of
         false ->
-            case erl_ddll:load(priv_dir(), ?DRIVER_NAME) of
+            case erl_ddll:load(code:priv_dir(emonk), ?DRIVER_NAME) of
                 ok ->
                     true;
                 {error, Error} ->
@@ -35,130 +35,19 @@ start() ->
             true
     end.
 
-%% @spec new() -> {ok, port()} | {error, atom()} | {error, any()}
-%% @doc Create a new Javascript VM instance and preload Douglas Crockford's
-%% json2 converter (http://www.json.org/js.html)
 new() ->
-    {ok, Port} = new(no_json),
-    %% Load json converter for use later
-    case define_js(Port, <<"json2.js">>, json_converter(), ?SCRIPT_TIMEOUT) of
-        ok ->
-            {ok, Port};
-        {error, Reason} ->
-            port_close(Port),
-            {error, Reason}
-    end.
+    {ok, open_port({spawn_driver, ?DRIVER_NAME ++ " foo"}, ?PORT_OPTS)}.
 
-%% @type init_fun() = function(port()).
-%% @spec new(no_json | init_fun() | {ModName::atom(), FunName::atom()}) -> {ok, port()} | {error, atom()} | {error, any()}
-%% @doc Create a new Javascript VM instance. The function arguments control how the VM instance is initialized.
-%% User supplied initializers must return true or false.
-new(no_json) ->
-    {ok, open_port({spawn, ?DRIVER_NAME}, [binary])};
-new(Initializer) when is_function(Initializer) ->
-    {ok, Port} = new(),
-    case Initializer(Port) of
-        ok ->
-            {ok, Port};
-        {error, Error} ->
-            js_driver:destroy(Port),
-            error_logger:error_report(Error),
-            throw({error, init_failed})
-    end;
-new({InitMod, InitFun}) ->
-    {ok, Port} = new(),
-    case InitMod:InitFun(Port) of
-        ok ->
-            {ok, Port};
-        {error, Error} ->
-            js_driver:destroy(Port),
-            error_logger:error_report(Error),
-            throw({error, init_failed})
-    end.
-
-%% @spec destroy(port()) -> ok
-%% @doc Destroys a Javascript VM instance
 destroy(Ctx) ->
-    port_close(Ctx).
+    case (catch port_close(Ctx)) of
+        true -> ok;
+        Else -> Else
+    end.
 
-%% @spec shutdown(port()) -> ok
-%% @doc Destroys a Javascript VM instance and shuts down the underlying Javascript infrastructure.
-%% NOTE: No new VMs can be created after this call is made!
 shutdown(Ctx) ->
     call_driver(Ctx, "sd", [], 60000),
     port_close(Ctx).
 
-%% @spec define_js(port(), binary()) -> ok | {error, any()}
-%% @doc Define a Javascript expression:
-%% js_driver:define(Port, &lt;&lt;"var x = 100;"&gt;&gt;).
-define_js(Ctx, Js) ->
-    define_js(Ctx, Js, ?SCRIPT_TIMEOUT).
-
-%% @private
-define_js(Ctx, {file, FileName}, Timeout) ->
-    {ok, File} = file:read_file(FileName),
-    define_js(Ctx, list_to_binary(FileName), File, Timeout);
-define_js(Ctx, Js, Timeout) when is_binary(Js) ->
-    define_js(Ctx, <<"unnamed">>, Js, Timeout).
-
-define_js(Ctx, FileName, Js, Timeout) when is_binary(FileName),
-                                           is_binary(Js) ->
-    case call_driver(Ctx, "dj", [FileName, Js], Timeout) of
-        {error, ErrorJson} when is_binary(ErrorJson) ->
-            {struct, [{<<"error">>, {struct, Error}}]} = js_mochijson2:decode(ErrorJson),
-            {error, Error};
-        ok ->
-            ok
-    end.
-
-%% @spec eval_js(port(), binary()) -> {ok, any()} | {error, any()}
-%% @doc Evaluate a Javascript expression and return the result
-eval_js(Ctx, Js) ->
-    eval_js(Ctx, Js, ?SCRIPT_TIMEOUT).
-
-%% @private
-eval_js(Ctx, {file, FileName}, Timeout) ->
-    {ok, File} = file:read_file(FileName),
-    eval_js(Ctx, File, Timeout);
-eval_js(Ctx, Js, Timeout) when is_binary(Js) ->
-    case call_driver(Ctx, "ej", [<<"<unnamed>">>, jsonify(Js)], Timeout) of
-        {ok, Result} ->
-            {ok, js_mochijson2:decode(Result)};
-        {error, ErrorJson} when is_binary(ErrorJson) ->
-            case js_mochijson2:decode(ErrorJson) of
-                {struct, [{<<"error">>, {struct, Error}}]} ->
-                    {error, Error};
-                {struct, [{<<"error">>, Error}]} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
-
-%% Internal functions
-%% @private
-jsonify(Code) when is_binary(Code) ->
-    {Body, <<LastChar:8>>} = split_binary(Code, size(Code) - 1),
-    C = case LastChar of
-            $; ->
-                Body;
-            _ ->
-                Code
-        end,
-    list_to_binary([<<"var result; try { result = JSON.stringify(">>, C, <<"); } catch(e) { result = JSON.stringify(e)} result;">>]).
-
-%% @private
-priv_dir() ->
-    %% Hacky workaround to handle running from a standard app directory
-    %% and .ez package
-    case code:priv_dir(erlang_js) of
-        {error, bad_name} ->
-            filename:join([filename:dirname(code:which(?MODULE)), "..", "priv"]);
-        Dir ->
-            Dir
-    end.
-
-%% @private
 call_driver(Ctx, Command, Args, Timeout) ->
     CallToken = make_call_token(),
     Marshalled = js_drv_comm:pack(Command, [CallToken] ++ Args),
@@ -175,18 +64,5 @@ call_driver(Ctx, Command, Args, Timeout) ->
              end,
     Result.
 
-%% @private
 make_call_token() ->
     list_to_binary(integer_to_list(erlang:phash2(erlang:make_ref()))).
-
-%% @private
-json_converter() ->
-    FileName = filename:join([priv_dir(), "json2.js"]),
-    case js_cache:fetch(FileName) of
-        none ->
-            {ok, Contents} = file:read_file(FileName),
-            js_cache:store(FileName, Contents),
-            Contents;
-        Contents ->
-            Contents
-    end.
