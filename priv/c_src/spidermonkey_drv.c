@@ -17,7 +17,6 @@
 #include <erl_driver.h>
 
 #include "spidermonkey.h"
-#include "config.h"
 #include "driver_comm.h"
 
 typedef struct _spidermonkey_drv_t {
