@@ -13,6 +13,22 @@
 
 main(_) ->
     etap:plan(1),
-    etap:is(emonk_driver:start(), true, "Started emonk driver."),
-    etap:end_tests().
+    case (catch test()) of
+        ok ->
+            etap:end_tests();
+        Other ->
+            etap:diag(io_lib:format("Test died abnormally: ~p", [Other])),
+            etap:bail()
+    end,
+    ok.
 
+test() ->
+    true = emonk_driver:start(),
+    {ok, Port} = emonk_driver:new(),
+    
+    etap:is(
+        emonk_driver:call_driver(Port, <<"var x = 2; x;">>),
+        {ok, 2},
+        "Successful roundtrip through the JS vm."
+    ),
+    ok.

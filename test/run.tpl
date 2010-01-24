@@ -16,4 +16,4 @@ BUILDDIR="%abs_top_builddir%"
 
 export ERL_LIBS="$BUILDDIR/src"
 
-prove -v $SRCDIR/test/*.t
+exec prove $SRCDIR/test/*.t

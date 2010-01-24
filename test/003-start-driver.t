@@ -12,9 +12,55 @@
 % the License.
 
 main(_) ->
-    etap:plan(3),
+    etap:plan(9),
+    case (catch test()) of
+        ok ->
+            etap:end_tests();
+        Other ->
+            etap:diag(io_lib:format("Test died abnormally: ~p", [Other])),
+            etap:bail()
+    end,
+    ok.
+
+test() ->
     etap:is(emonk_driver:start(), true, "Started emonk driver."),
+
+    etap:fun_is(
+        fun
+            ({'EXIT', {badarg, _}}) -> true;
+            (_) -> false
+        end,
+        (catch open_port({spawn_driver, "emonk_drv foobar"}, [binary])),
+        "Opening a port with a bad settings string fails."
+    ),
+
+    test_no_settings(),
+    test_valid_settings(),
+    test_ignore_settings(),
+    test_invalid_settings(),
+    ok.
+
+test_no_settings() ->
     {ok, Port} = emonk_driver:new(),
     etap:is(is_port(Port), true, "Returned a valid port."),
-    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port ok."),
-    etap:end_tests().
+    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port.").
+
+test_valid_settings() ->
+    {ok, Port} = emonk_driver:new([{rt_max_bytes, 8388608}]),
+    etap:is(is_port(Port), true, "Returned a valid port with settings."),
+    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port.").
+
+test_ignore_settings() ->
+    {ok, Port} = emonk_driver:new([foo]),
+    etap:is(is_port(Port), true, "Returned a valid port ignoring settings."),
+    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port.").
+
+test_invalid_settings() ->
+    etap:fun_is(
+        fun
+            ({'EXIT', {badarg, _}}) -> true;
+            (_) -> false
+        end,
+        (catch emonk_driver:new([{rt_max_bytes, -10}])),
+        "Invalid settings cause an error."
+    ).

@@ -15,11 +15,17 @@
 
 -module(emonk_driver).
 
--export([start/0, new/0, destroy/1, shutdown/1]).
+-export([start/0, new/0, new/1, destroy/1]).
+-export([call_driver/2, call_driver/3]).
 
 -define(SCRIPT_TIMEOUT, 5000).
 -define(DRIVER_NAME, "emonk_drv").
 -define(PORT_OPTS, [binary]).
+
+-define(RT_MAX_BYTES, 1048576).
+-define(GC_MAX_BYTES, 8388608).
+-define(GC_MAX_MALLOC, 8388608).
+-define(CONTEXT_STACK, 8192).
 
 start() ->
     {ok, Drivers} = erl_ddll:loaded_drivers(),
@@ -36,7 +42,10 @@ start() ->
     end.
 
 new() ->
-    {ok, open_port({spawn_driver, ?DRIVER_NAME ++ " foo"}, ?PORT_OPTS)}.
+    {ok, open_port({spawn_driver, ?DRIVER_NAME}, [binary])}.
+
+new(Settings) ->
+    {ok, open_port({spawn_driver, parse_settings(Settings)}, [binary])}.
 
 destroy(Ctx) ->
     case (catch port_close(Ctx)) of
@@ -44,25 +53,26 @@ destroy(Ctx) ->
         Else -> Else
     end.
 
-shutdown(Ctx) ->
-    call_driver(Ctx, "sd", [], 60000),
-    port_close(Ctx).
+call_driver(Port, Command) ->
+    call_driver(Port, Command, ?SCRIPT_TIMEOUT).
 
-call_driver(Ctx, Command, Args, Timeout) ->
-    CallToken = make_call_token(),
-    Marshalled = js_drv_comm:pack(Command, [CallToken] ++ Args),
-    port_command(Ctx, Marshalled),
-    Result = receive
-                 {CallToken, ok} ->
-                     ok;
-                 {CallToken, ok, R} ->
-                     {ok, R};
-                 {CallToken, error, Error} ->
-                     {error, Error}
-             after Timeout ->
-                     {error, timeout}
-             end,
-    Result.
+call_driver(Port, Command, _Timeout) ->
+    Resp = port_control(Port, 1, Command),
+    io:format("Resp: ~p~n", [Resp]),
+    io:format("Resp: ~p~n", [binary_to_term(Resp)]).
+
+parse_settings(Settings) when is_list(Settings) ->
+    RtMaxBytes = proplists:get_value(rt_max_bytes, Settings, ?RT_MAX_BYTES),
+    GcMaxBytes = proplists:get_value(gc_max_bytes, Settings, ?GC_MAX_BYTES),
+    GcMaxMalloc = proplists:get_value(gc_max_malloc, Settings, ?GC_MAX_MALLOC),
+    CtxStack = proplists:get_value(context_stack, Settings, ?CONTEXT_STACK),
+    Cmd = io_lib:format(
+        "~s rt=~B gcmb=~B gcld=~B ctx=~B",
+        [?DRIVER_NAME, RtMaxBytes, GcMaxBytes, GcMaxMalloc, CtxStack]
+    ),
+    lists:flatten(Cmd).
 
 make_call_token() ->
     list_to_binary(integer_to_list(erlang:phash2(erlang:make_ref()))).
+
+

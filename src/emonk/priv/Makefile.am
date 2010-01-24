@@ -15,9 +15,10 @@ emonkprivdir = $(emonk)/priv
 emonkprivlibdir = $(emonk)/priv/lib
 
 EMONK_SRCS = \
+    emonk.c \
+    emonk_comm.c \
     emonk_drv.c \
-	driver_comm.c \
-	spidermonkey.c
+    emonk_util.c
 
 emonkprivlib_LTLIBRARIES = emonk_drv.la
 emonk_drv_la_SOURCES = $(EMONK_SRCS)
