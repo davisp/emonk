@@ -4,6 +4,9 @@
 #include <erl_driver.h>
 #include <jsapi.h>
 
+#include "emonk_comm.h"
+#include "emonk_util.h"
+
 typedef struct _emonk_vm_t
 {
     JSRuntime* rt;
@@ -11,8 +14,8 @@ typedef struct _emonk_vm_t
     JSObject* gl;
 } emonk_vm_t;
 
-emonk_vm_t* init_vm(uint rt_max, uint gc_max, uint gc_last, uint ctx);
+emonk_vm_t* init_vm(emonk_settings_t* settings);
 int stop_vm(emonk_vm_t* vm);
-void* vm_eval(emonk_vm_t* vm, const char *code, int clen, int* rlen);
+void* vm_eval(emonk_vm_t* vm, emonk_req_t* req, int* length);
 
 #endif // Included emonk.h

@@ -8,9 +8,14 @@
 #define CONTEXT_STACK 8192
 #define SETTING_MAX 1073741824
 
+typedef struct _emonk_settings_t
+{
+    uint rt_max_bytes;
+    uint gc_max_bytes;
+    uint gc_max_malloc;
+    uint context_stack;
+} emonk_settings_t;
 
-int
-parse_settings(char* cmd, uint* rt_max, uint* gc_max, uint* gc_last, uint* ctx);
-
+int parse_settings(char* cmd, emonk_settings_t* settings);
 
 #endif // Included util.h

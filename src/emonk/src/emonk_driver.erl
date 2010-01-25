@@ -56,10 +56,21 @@ destroy(Ctx) ->
 call_driver(Port, Command) ->
     call_driver(Port, Command, ?SCRIPT_TIMEOUT).
 
-call_driver(Port, Command, _Timeout) ->
-    Resp = port_control(Port, 1, Command),
-    io:format("Resp: ~p~n", [Resp]),
-    io:format("Resp: ~p~n", [binary_to_term(Resp)]).
+call_driver(Port, Command, Timeout) ->
+    Token = make_call_token(),
+    case port_control(Port, 0, term_to_binary({Token, Command})) of
+        [0] ->
+            {error, driver_error};
+        [] ->
+            receive
+                {Token, ok, undefined} -> {ok, undefined};
+                {Token, ok, Resp} -> {ok, Resp};
+                {Token, error, Error} -> {error, Error};
+                Else -> io:format(standard_error, "UNEXPECTED: ~p", [Else])
+            after Timeout ->
+                {error, timeout}
+            end
+    end.
 
 parse_settings(Settings) when is_list(Settings) ->
     RtMaxBytes = proplists:get_value(rt_max_bytes, Settings, ?RT_MAX_BYTES),

@@ -8,34 +8,40 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 int
-parse_settings(char* cmd, uint* rt_max, uint* gc_max, uint* gc_last, uint* ctx)
+parse_settings(char* cmd, emonk_settings_t* settings)
 {
     size_t idx = 0;
     size_t len = strlen(cmd);
 
-    *rt_max = RT_MAX_BYTES;  // 1MiB
-    *gc_max = GC_MAX_BYTES;  // 8MiB
-    *gc_last = GC_MAX_MALLOC; // 8MiB
-    *ctx = CONTEXT_STACK;        // 8KiB
+    settings->rt_max_bytes = RT_MAX_BYTES;      // 1MiB
+    settings->gc_max_bytes = GC_MAX_BYTES;      // 8MiB
+    settings->gc_max_malloc = GC_MAX_MALLOC;    // 8MiB
+    settings->context_stack = CONTEXT_STACK;    // 8KiB
 
     // Seek past driver name
     for(idx; idx < len && cmd[idx] != ' '; idx++) {}
-    if(idx+1 >= len) return 0;
-    idx += 1;
+    if(++idx >= len) return 0;
 
-    if(sscanf(cmd + idx, "rt=%u gcmb=%u gcld=%u ctx=%u",
-            rt_max, gc_max, gc_last, ctx) != 4)
+    if(sscanf(
+        cmd + idx,
+        "rt=%u gcmb=%u gcld=%u ctx=%u",
+        &settings->rt_max_bytes,
+        &settings->gc_max_bytes,
+        &settings->gc_max_malloc,
+        &settings->context_stack
+    ) != 4)
     {
         return -1;
     }
 
-    if(*rt_max > SETTING_MAX
-            || *gc_max > SETTING_MAX
-            || *gc_last > SETTING_MAX
-            || *ctx > SETTING_MAX)
+    if(settings->rt_max_bytes > SETTING_MAX
+        || settings->gc_max_bytes > SETTING_MAX
+        || settings->gc_max_malloc > SETTING_MAX
+        || settings->context_stack > SETTING_MAX)
     {
         return -1;
     }
     
     return 0;
 }
+

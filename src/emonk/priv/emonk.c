@@ -31,7 +31,7 @@ void* vm_error(emonk_vm_t* vm);
 void* vm_response(emonk_vm_t* vm, jsval rval);
 
 emonk_vm_t*
-init_vm(uint rt_max, uint gc_max, uint gc_last, uint ctx)
+init_vm(emonk_settings_t* settings)
 {
     uint32 flags = 0;
     emonk_vm_t* vm = driver_alloc(sizeof(emonk_vm_t));
@@ -39,13 +39,13 @@ init_vm(uint rt_max, uint gc_max, uint gc_last, uint ctx)
     if(vm == NULL) return NULL;
     memset(vm, 0, sizeof(emonk_vm_t));
 
-    vm->rt = JS_NewRuntime(rt_max);
+    vm->rt = JS_NewRuntime(settings->rt_max_bytes);
     if(vm->rt == NULL) goto error;
     
-    JS_SetGCParameter(vm->rt, JSGC_MAX_BYTES, gc_max);
-    JS_SetGCParameter(vm->rt, JSGC_MAX_MALLOC_BYTES, gc_last);
+    JS_SetGCParameter(vm->rt, JSGC_MAX_BYTES, settings->gc_max_bytes);
+    JS_SetGCParameter(vm->rt, JSGC_MAX_MALLOC_BYTES, settings->gc_max_malloc);
     
-    vm->cx = JS_NewContext(vm->rt, ctx);
+    vm->cx = JS_NewContext(vm->rt, settings->context_stack);
     if(vm->cx == NULL) goto error;
     BEGIN_REQ(vm->cx);
 
@@ -58,7 +58,7 @@ init_vm(uint rt_max, uint gc_max, uint gc_last, uint ctx)
     vm->gl = JS_NewObject(vm->cx, &global_class, NULL, NULL);
     if(vm->gl == NULL) goto error;
     if(!JS_InitStandardClasses(vm->cx, vm->gl)) goto error;
-    JS_SetErrorReporter(vm->cx, on_error);
+    JS_SetErrorReporter(vm->cx, mk_error);
     
     END_REQ(vm->cx);
     return vm;
@@ -80,20 +80,46 @@ stop_vm(emonk_vm_t* vm)
 }
 
 void*
-vm_eval(emonk_vm_t* vm, const char *code, int clen, int* rlen)
+vm_eval(emonk_vm_t* vm, emonk_req_t* req, int* length)
 {
+    ErlDrvBinary* error;
     void* ret = NULL;
     jsval rval;
+    int i, cnt;
+    
+    for(i = 0, cnt = 0; i < req->scr_len; i++)
+    {
+        if(req->script[i] == '\n') cnt += 1;
+    }
 
     BEGIN_REQ(vm->cx);
     JS_SetContextPrivate(vm->cx, NULL);
-    if(!JS_EvaluateScript(vm->cx, vm->gl, code, clen, "", 1, &rval))
+    if(!JS_EvaluateScript(vm->cx, vm->gl, req->script, req->scr_len, "", cnt, &rval))
     {
-        ret = vm_error(vm);
+        error = JS_GetContextPrivate(vm->cx);
+        if(error == NULL)
+        {
+            ret = NULL;
+        }
+        else
+        {
+            ret = driver_alloc(error->orig_size);
+            if(ret == NULL)
+            {
+                ret = NULL;
+            }
+            else
+            {
+                memcpy(ret, error->orig_bytes, error->orig_size);
+                *length = error->orig_size;
+            }
+            driver_free_binary(error);
+        }
     }
     else
     {
-        ret = to_erl(vm->cx, rval, rlen);
+        req->ok = 1;
+        ret = to_erl(vm->cx, rval, length);
     }
 
     JS_MaybeGC(vm->cx);
@@ -106,11 +132,5 @@ void*
 vm_error(emonk_vm_t* vm)
 {
     return NULL;
-}
-
-void
-on_error(JSContext* cx, const char* mesg, JSErrorReport* report)
-{
-    return;
 }
 

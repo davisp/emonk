@@ -20,13 +20,16 @@
 
 typedef struct _emonk_drv_t
 {
-  ErlDrvPort port;
-  ErlDrvTermData ok;
-  ErlDrvTermData error;
-  ErlDrvTermData unknown_cmd;
-  emonk_vm_t* vm;
-  int shutdown;
+    ErlDrvPort port;
+    ErlDrvTermData ok;
+    ErlDrvTermData error;
+    ErlDrvTermData undefined;
+    ErlDrvTermData bad_cmd;
+    emonk_vm_t* vm;
 } emonk_drv_t;
+
+int send_undefined(emonk_drv_t* drv, emonk_req_t* req);
+int send_response(emonk_drv_t* drv, emonk_req_t* req, void* data, int length);
 
 static int
 emonk_init()
@@ -41,8 +44,9 @@ emonk_start(ErlDrvPort port, char *cmd)
     uint rt_max, gc_max, gc_last, ctx;
     emonk_drv_t* drv = NULL;
     ErlDrvData ret = ERL_DRV_ERROR_GENERAL;
+    emonk_settings_t settings;
     
-    if(parse_settings(cmd, &rt_max, &gc_max, &gc_last, &ctx) < 0)
+    if(parse_settings(cmd, &settings) < 0)
     {
         ret = ERL_DRV_ERROR_BADARG;
         goto error;
@@ -54,12 +58,11 @@ emonk_start(ErlDrvPort port, char *cmd)
     drv->port = port;
     drv->ok = driver_mk_atom("ok");
     drv->error = driver_mk_atom("error");
-    drv->unknown_cmd = driver_mk_atom("unknown_command");
+    drv->undefined = driver_mk_atom("undefined");
+    drv->bad_cmd = driver_mk_atom("bad_command");
     
-    drv->vm = init_vm(rt_max, gc_max, gc_last, ctx);
+    drv->vm = init_vm(&settings);
     if(drv->vm == NULL) goto error;
-    
-    set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
     
     return (ErlDrvData) drv;
 
@@ -77,26 +80,39 @@ emonk_stop(ErlDrvData handle)
 }
 
 static int
-emonk_control(ErlDrvData handle, uint cmd,
-                char* buf, int len, char **rbuf, int rlen)
+emonk_control(ErlDrvData handle, uint cmd, char* b, int l, char **rb, int rl)
 {
     emonk_drv_t* drv = (emonk_drv_t*) handle;
-    ErlDrvBinary* ret = NULL;
-
-    void* data = vm_eval(drv->vm, buf, len, &rlen);
-    if(data == NULL) return 0;
-
-    for(len = 0; len < rlen; len++)
+    emonk_req_t* req = read_req_info(cmd, (unsigned char*) b, l);
+    int length;
+    int resp;
+    
+    if(req == NULL)
     {
-        fprintf(stderr, "%c\n", ((char*) data)[len]);
+        *rb[0] = 0;
+        return 1;
     }
 
-    ret = driver_alloc_binary(rlen);
-    if(ret == NULL) return -1;
-    memcpy(ret->orig_bytes, data, rlen);
-    driver_free(data);
+    void* data = vm_eval(drv->vm, req, &length);
+    
+    if(data == NULL)
+    {
+        resp = send_undefined(drv, req);
+    }
+    else
+    {
+        resp = send_response(drv, req, data, length);
+    }
 
-    return rlen;
+    if(data != NULL) driver_free(data);
+    
+    if(resp < 0)
+    {
+        *rb[0] = 0;
+        return 1;
+    }
+    
+    return 0;
 }
 
 static ErlDrvEntry
@@ -127,3 +143,26 @@ DRIVER_INIT(emonk_drv) {
   return &emonk_drv_entry;
 }
 
+int
+send_undefined(emonk_drv_t* drv, emonk_req_t* req)
+{
+    ErlDrvTermData terms[] = {
+        ERL_DRV_BUF2BINARY, (ErlDrvTermData) req->call_id, req->cid_len,
+		ERL_DRV_ATOM, req->ok ? drv->ok : drv->error,
+		ERL_DRV_ATOM, drv->undefined,
+		ERL_DRV_TUPLE, 3
+	};
+    return driver_output_term(drv->port, terms, 9);    
+}
+
+int
+send_response(emonk_drv_t* drv, emonk_req_t* req, void* data, int length)
+{
+    ErlDrvTermData terms[] = {
+        ERL_DRV_BUF2BINARY, (ErlDrvTermData) req->call_id, req->cid_len,
+		ERL_DRV_ATOM, req->ok ? drv->ok : drv->error,
+		ERL_DRV_EXT2TERM, (ErlDrvTermData) data, length,
+		ERL_DRV_TUPLE, 3
+	};
+    return driver_output_term(drv->port, terms, 10);
+}

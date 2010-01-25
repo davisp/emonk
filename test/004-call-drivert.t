@@ -25,10 +25,41 @@ main(_) ->
 test() ->
     true = emonk_driver:start(),
     {ok, Port} = emonk_driver:new(),
-    
-    etap:is(
-        emonk_driver:call_driver(Port, <<"var x = 2; x;">>),
-        {ok, 2},
-        "Successful roundtrip through the JS vm."
-    ),
+
+    test_response(Port),
+    test_undefined(Port),
+    test_error(Port),
     ok.
+
+test_response(Port) ->
+    etap:is(
+        emonk_driver:call_driver(Port, <<"var x = 2; x*3;">>),
+        {ok, 6},
+        "Successful roundtrip through the JS vm."
+    ).
+
+test_undefined(Port) ->
+    etap:is(
+        emonk_driver:call_driver(Port, <<"var x = function() {};">>),
+        {ok, undefined},
+        "Successfully ignored non-JSON response."
+    ).
+
+test_error(Port) ->
+    etap:fun_is(
+        fun
+            ({error, {_, _, _}}) -> true;
+            (_) -> false
+        end,
+        emonk_driver:call_driver(Port, <<"f * 3">>),
+        "Reported the undefined error."
+    ),
+    
+    etap:fun_is(
+        fun
+            ({error, {_, _, _}}) -> true;
+            (_) -> false
+        end,
+        emonk_driver:call_driver(Port, <<"throw \"foo\";">>),
+        "Reported the thrown exception."
+    ).
