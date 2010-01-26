@@ -13,6 +13,6 @@
 
 main(_) ->
     etap:plan(1),
-    etap:is(emonk_driver:start(), true, "Started emonk driver."),
+    etap:is(emonk:start(), ok, "Started emonk driver."),
     etap:end_tests().
 

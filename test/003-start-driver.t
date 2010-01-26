@@ -23,7 +23,7 @@ main(_) ->
     ok.
 
 test() ->
-    etap:is(emonk_driver:start(), true, "Started emonk driver."),
+    etap:is(emonk:start(), ok, "Started emonk driver."),
 
     etap:fun_is(
         fun

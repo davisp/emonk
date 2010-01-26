@@ -12,7 +12,7 @@
 % the License.
 
 main(_) ->
-    etap:plan(1),
+    etap:plan(8),
     case (catch test()) of
         ok ->
             etap:end_tests();
@@ -23,35 +23,62 @@ main(_) ->
     ok.
 
 test() ->
-    true = emonk_driver:start(),
-    {ok, Port} = emonk_driver:new(),
+    ok = emonk:start(),
+    {ok, Port} = emonk:new(),
 
-    test_response(Port),
-    test_undefined(Port),
-    test_error(Port),
+    test_eval_ok(Port),
+    test_call_ok(Port),
+
+    test_eval_undefined(Port),
+    test_call_undefined(Port),
+    
+    test_eval_error(Port),
+    test_call_error(Port),
     ok.
 
-test_response(Port) ->
+test_eval_ok(Port) ->
     etap:is(
-        emonk_driver:call_driver(Port, <<"var x = 2; x*3;">>),
+        emonk:eval(Port, <<"var x = 2; x*3;">>),
         {ok, 6},
         "Successful roundtrip through the JS vm."
     ).
 
-test_undefined(Port) ->
+test_call_ok(Port) ->
+    {ok, undefined} = emonk:eval(Port, <<"var g = function(x) {return x*2};">>),
     etap:is(
-        emonk_driver:call_driver(Port, <<"var x = function() {};">>),
+        emonk:call(Port, <<"g">>, [6]),
+        {ok, 12},
+        "Successful function call round trip with an argument string."
+    ),
+    
+    etap:is(
+        emonk:call(Port, <<"g">>, [600, foo]),
+        {ok, 1200},
+        "Successful call roundtrip with an argument list."
+    ).
+
+test_eval_undefined(Port) ->
+    etap:is(
+        emonk:eval(Port, <<"var x = function() {};">>),
         {ok, undefined},
         "Successfully ignored non-JSON response."
     ).
 
-test_error(Port) ->
+test_call_undefined(Port) ->
+    {ok, undefined} = emonk:eval(Port, <<"var h = function(x) {return g};">>),
+    etap:is(
+        emonk:call(Port, <<"h">>, []),
+        {ok, undefined},
+        "Successfully ignored non-JSON response."
+    ).
+
+test_eval_error(Port) ->
     etap:fun_is(
         fun
             ({error, {_, _, _}}) -> true;
             (_) -> false
         end,
-        emonk_driver:call_driver(Port, <<"f * 3">>),
+        emonk:eval(Port, <<"f * 3">>),
         "Reported the undefined error."
     ),
     
@@ -60,6 +87,17 @@ test_error(Port) ->
             ({error, {_, _, _}}) -> true;
             (_) -> false
         end,
-        emonk_driver:call_driver(Port, <<"throw \"foo\";">>),
+        emonk:eval(Port, <<"throw \"foo\";">>),
         "Reported the thrown exception."
+    ).
+
+test_call_error(Port) ->
+    {ok, undefined} = emonk:eval(Port, <<"var k = function(x) {throw(2);};">>),
+    etap:fun_is(
+        fun
+            ({error, {_, _, _}}) -> true;
+            (_E) -> false
+        end,
+        emonk:call(Port, <<"k">>, []),
+        "Reported a thrown error."
     ).

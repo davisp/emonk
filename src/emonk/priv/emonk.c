@@ -26,10 +26,6 @@ static JSClass global_class = {
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
-void on_error(JSContext* cx, const char* mesg, JSErrorReport* report);
-void* vm_error(emonk_vm_t* vm);
-void* vm_response(emonk_vm_t* vm, jsval rval);
-
 emonk_vm_t*
 init_vm(emonk_settings_t* settings)
 {
@@ -123,14 +119,62 @@ vm_eval(emonk_vm_t* vm, emonk_req_t* req, int* length)
     }
 
     JS_MaybeGC(vm->cx);
-
     END_REQ(vm->cx);
     return ret;
 }
 
 void*
-vm_error(emonk_vm_t* vm)
+vm_call(emonk_vm_t* vm, emonk_req_t* req, int* length)
 {
-    return NULL;
+    ErlDrvBinary* error;
+    void* ret = NULL;
+    jsval func, rval;
+    int i, cnt;
+
+    BEGIN_REQ(vm->cx);
+    JS_SetContextPrivate(vm->cx, NULL);
+        
+    if(!JS_GetProperty(vm->cx, vm->gl, req->function, &func))
+    {
+        return NULL;
+    }
+
+    if(JS_TypeOfValue(vm->cx, func) != JSTYPE_FUNCTION)
+    {
+        return NULL;
+    }
+
+    if(!JS_CallFunctionValue(vm->cx, vm->gl, func, req->argc, req->argv, &rval))
+    {
+        error = JS_GetContextPrivate(vm->cx);
+        if(error == NULL)
+        {
+            ret = NULL;
+        }
+        else
+        {
+            ret = driver_alloc(error->orig_size);
+            if(ret == NULL)
+            {
+                ret = NULL;
+            }
+            else
+            {
+                memcpy(ret, error->orig_bytes, error->orig_size);
+                *length = error->orig_size;
+            }
+            driver_free_binary(error);
+        }
+    }
+    else
+    {
+        req->ok = 1;
+        ret = to_erl(vm->cx, rval, length);
+    }
+
+    JS_MaybeGC(vm->cx);
+    END_REQ(vm->cx);
+    return ret;
 }
+
 

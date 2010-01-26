@@ -19,17 +19,15 @@ emonkebin_DATA = $(compiled_files)
 source_files = \
 	src/emonk.app.in \
 	src/emonk.erl \
-	src/emonk_sup.erl \
 	src/emonk_cache.erl \
-	src/emonk_driver.erl
+	src/emonk_sup.erl
 
 compiled_files = \
 	ebin/emonk.app \
 	ebin/emonk.beam \
-	ebin/emonk_sup.beam \
 	ebin/emonk_cache.beam \
-	ebin/emonk_driver.beam
-
+	ebin/emonk_sup.beam
+	
 EXTRA_DIST = $(source_files)
 CLEANFILES = $(compiled_files)
 

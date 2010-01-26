@@ -14,11 +14,10 @@
 % Test that we can load each module.
 
 main(_) ->
-    etap:plan(4),
+    etap:plan(3),
     Modules = [
         emonk,
         emonk_cache,
-        emonk_driver,
         emonk_sup
     ],
 

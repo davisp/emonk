@@ -26,6 +26,7 @@
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
+-define(DRIVER_NAME, "emonk_drv").
 
 %% @private
 start_link() ->
@@ -33,22 +34,24 @@ start_link() ->
 
 %% @private
 init([]) ->
-    RestartStrategy = one_for_one,
-    MaxRestarts = 1000,
-    MaxSecondsBetweenRestarts = 3600,
+    Flags = {one_for_one, 1000, 3600},
+    CacheMFA = {emonk_cache, start_link, []},
+    Kids = [{cache, CacheMFA, permanent, 2000, worker, [emonk_cache]}],
+    case load_driver() of
+        true -> {ok, {Flags, Kids}};
+        false -> throw({error, {load_error, "Failed to load emonk_drv.so"}})
+    end.
 
-    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
-
-    Restart = permanent,
-    Shutdown = 2000,
-    Type = worker,
-
-    case js_driver:load_driver() of
+load_driver() ->
+    {ok, Drivers} = erl_ddll:loaded_drivers(),
+    case lists:member(?DRIVER_NAME, Drivers) of
         false ->
-            throw({error, {load_error, "Failed to load spidermonkey_drv.so"}});
+            case erl_ddll:load(code:priv_dir(emonk), ?DRIVER_NAME) of
+                ok ->
+                    true;
+                {error, Error} ->
+                    {error, {?DRIVER_NAME, erl_ddll:format_error(Error)}}
+            end;
         true ->
-            Cache = {cache, {js_cache, start_link, []},
-                     Restart, Shutdown, Type, [js_cache]},
-
-            {ok, {SupFlags, [Cache]}}
+            true
     end.

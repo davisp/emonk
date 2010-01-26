@@ -83,17 +83,26 @@ static int
 emonk_control(ErlDrvData handle, uint cmd, char* b, int l, char **rb, int rl)
 {
     emonk_drv_t* drv = (emonk_drv_t*) handle;
-    emonk_req_t* req = read_req_info(cmd, (unsigned char*) b, l);
+    emonk_req_t* req = read_req_info(drv->vm->cx, cmd, (unsigned char*) b, l);
+    void* data = NULL;
     int length;
     int resp;
+
     
     if(req == NULL)
     {
         *rb[0] = 0;
         return 1;
     }
-
-    void* data = vm_eval(drv->vm, req, &length);
+    
+    if(cmd == 0)
+    {
+        data = vm_eval(drv->vm, req, &length);
+    }
+    else
+    {
+        data = vm_call(drv->vm, req, &length);
+    }
     
     if(data == NULL)
     {
@@ -105,6 +114,7 @@ emonk_control(ErlDrvData handle, uint cmd, char* b, int l, char **rb, int rl)
     }
 
     if(data != NULL) driver_free(data);
+    if(req != NULL) free_req_info(req);
     
     if(resp < 0)
     {

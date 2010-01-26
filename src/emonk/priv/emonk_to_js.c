@@ -392,7 +392,6 @@ to_js_object(JSContext* cx, char* data, int* remaining)
     
     if(data[0] != NIL)
     {
-        fprintf(stderr, "NO END NIL FOR OBJECT LIST: %c\n", data[0]);
         return JSVAL_VOID;
     }
     *remaining -= 1;
@@ -406,9 +405,7 @@ to_js(JSContext* cx, char* data, int* remaining)
     char type = data[0];
     data += 1;
     *remaining -= 1;
-    
-    fprintf(stderr, "MAKING OBJECT TYPE: '%c' %d\n", type, *remaining);
-    
+        
     if(type == ATOM)
     {
         return to_js_special(cx, data, remaining);
@@ -442,6 +439,5 @@ to_js(JSContext* cx, char* data, int* remaining)
         return to_js_object(cx, data, remaining);
     }
     
-    fprintf(stderr, "INVALID TYPE: '%c'\n", type);
     return JSVAL_VOID;
 }

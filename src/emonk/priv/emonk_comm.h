@@ -32,9 +32,14 @@ typedef struct _emonk_req_t
 
     char* script;
     int scr_len;
+    
+    char* function;    
+    int argc;
+    jsval* argv;
 } emonk_req_t;
 
-emonk_req_t* read_req_info(uint cmd, unsigned char* buf, int length);
+emonk_req_t* read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len);
+void* free_req_info(emonk_req_t* req);
 
 void* to_erl(JSContext* cx, jsval val, int* length);
 jsval to_js(JSContext* cx, char* data, int* remaining);
