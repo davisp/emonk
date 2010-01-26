@@ -1,0 +1,14 @@
+State of the Monkey
+===================
+
+The Spidermonkey team thinks that actual releases are un-awesome. So we have a 1.7 release from 1904, a 1.8 release from 1995, and tip. This complicates things.
+
+My Local Development
+--------------------
+
+I patched the Homebrew formulas for Spidermonkey this weekend so if you're on OS X 10.6 you should be able to "brew install spidermonkey" to get a working environment. If you're on another platform please send me feed back on what is or isn't working for you. I'll be more than glad to fix up the build system to detect what I can so we can be very explicit on detecting compatibility.
+
+Fun Times
+---------
+
+I'm not actually certain how the Spidermonkey library works in terms of thread safety. So my efforts in making sure that a threadsafe libmozjs is available might all be for nothing. Again, if you have experience in such things, please send me a note.
