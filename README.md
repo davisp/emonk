@@ -47,6 +47,15 @@ I've been using [etap][etap] to test as I code. Its awesome. You should use it. 
 
 [etap]: http://github.com/ngerakines/etap
 
+Bugs and Things
+---------------
+
+The best place to file [bugs][bugs] is at the [issue][bugs] tracker on [GitHub][github]. Less yapping, more tapping. Thanks [mattly][mattly].
+
+[bugs]: http://github.com/davisp/emonk/issues
+[github]: http://github.com/davisp
+[mattly]: http://twitter.com/mattly
+
 Yep
 ---
 
