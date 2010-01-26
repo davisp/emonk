@@ -1,8 +1,8 @@
-Apache CouchDB AUTHORS
-======================
+Emonk AUTHORS
+=============
 
-A number of people have contributed directly to Apache CouchDB by writing
-documentation or developing software. Some of these people are:
+Thanks to Kevin Smith for his work on erlang_js of which
+this work is a direct derivation.
 
  * Kevin Smith <ksmith@basho.com>
  * Paul Joseph Davis <paul.joseph.davis@gmail.com>
