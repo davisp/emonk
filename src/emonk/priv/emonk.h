@@ -7,6 +7,14 @@
 #include "emonk_comm.h"
 #include "emonk_util.h"
 
+#define BEGIN_REQ(cx)           \
+    JS_SetContextThread(cx);    \
+    JS_BeginRequest(cx);
+
+#define END_REQ(cx)             \
+    JS_EndRequest(cx);          \
+    JS_ClearContextThread(cx);
+
 typedef struct _emonk_vm_t
 {
     JSRuntime* rt;

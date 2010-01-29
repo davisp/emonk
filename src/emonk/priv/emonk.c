@@ -4,14 +4,6 @@
 #include "emonk.h"
 #include "emonk_comm.h"
 
-#define BEGIN_REQ(cx)           \
-    JS_SetContextThread(cx);    \
-    JS_BeginRequest(cx);
-
-#define END_REQ(cx)             \
-    JS_EndRequest(cx);          \
-    JS_ClearContextThread(cx);
-
 static JSClass global_class = {
     "global",
     JSCLASS_GLOBAL_FLAGS,

@@ -1,4 +1,5 @@
 
+#include "emonk.h"
 #include "emonk_comm.h"
 
 inline int
@@ -37,6 +38,7 @@ read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len)
     int remain;
     int i;
 
+    BEGIN_REQ(cx);
     req = (emonk_req_t*) driver_alloc(sizeof(emonk_req_t));
     if(req == NULL) goto error;
     memset(req, 0, sizeof(emonk_req_t));
@@ -62,6 +64,7 @@ read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len)
         req->script = buf + idx;
         idx += req->scr_len;
         
+        END_REQ(cx);
         return req;
     }
     else // Reading a function signature.
@@ -82,6 +85,7 @@ read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len)
         if(buf[idx] == NIL)
         {
             req->argc = 0;
+            END_REQ(cx);
             return req;
         }
         
@@ -95,15 +99,15 @@ read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len)
             {
                 req->argv[i] = INT_TO_JSVAL((int) buf[idx+i]);
             }
-            idx += req->argc;        
+            idx += req->argc;
         }
         else if(buf[idx++] == LIST)
         {
-            req->argc = read_int32(buf+idx, &idx);        
+            req->argc = read_int32(buf+idx, &idx);
             req->argv = (jsval*) driver_alloc(req->argc * sizeof(jsval));
             if(req->argv == NULL) goto error;
 
-            remain = len - idx;        
+            remain = len - idx;
             for(i = 0; i < req->argc && remain > 0; i++)
             {
                 req->argv[i] = to_js(cx, buf+idx, &remain);
@@ -119,10 +123,12 @@ read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len)
             goto error;
         }
 
+        END_REQ(cx);
         return req;
     }
 
 error:
+    END_REQ(cx);
     return free_req_info(req);
 }
 

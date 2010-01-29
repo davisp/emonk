@@ -154,12 +154,23 @@ jsval
 to_js_float(JSContext* cx, char* data, int* remaining, char type)
 {
     double val;
-    jsval ret;
+    unsigned int tmp[2];
+    jsval ret = JSVAL_VOID;
     
     if(type == NEW_FLOAT)
     {
-        memcpy(&val, data, 8);
-        *remaining -= 8;
+        if(2 == htonl(2))
+        {
+            memcpy(&val, data, 8);
+        }
+        else
+        {
+            memcpy(tmp+1, data, 4);
+            memcpy(tmp, data+4, 4);
+            tmp[0] = ntohl(tmp[0]);
+            tmp[1] = ntohl(tmp[1]);
+            val = ((float*) tmp)[0];
+        }
     }
     else
     {
@@ -171,7 +182,7 @@ to_js_float(JSContext* cx, char* data, int* remaining, char type)
     {
         return JSVAL_VOID;
     }
-    
+
     return ret;
 }
 
@@ -250,7 +261,7 @@ to_js_array(JSContext* cx, char* data, int* remaining, char type)
         else
         {
             left = *remaining;
-            val = to_js_object(cx, data, remaining);
+            val = to_js(cx, data, remaining);
             data += (left - *remaining);
         }
 
@@ -356,9 +367,9 @@ to_js_object(JSContext* cx, char* data, int* remaining)
 
     if(data[0] != LIST) return JSVAL_VOID;
     memcpy(&length, data+1, 4);
+    length = ntohl(length);
     *remaining -= 5;
     data += 5;
-    length = ntohl(length);
     
     for(i = 0; i < length; i++)
     {
@@ -373,14 +384,14 @@ to_js_object(JSContext* cx, char* data, int* remaining)
         data += before - *remaining;
         
         before = *remaining;
-        val = to_js_object(cx, data, remaining);
+        val = to_js(cx, data, remaining);
         if(val == JSVAL_VOID)
         {
             JS_free(cx, key);
             return JSVAL_VOID;
         }
         data += before - *remaining;
-                
+        
         if(!JS_SetUCProperty(cx, ret, key, klen, &val))
         {
             JS_free(cx, key);
@@ -420,7 +431,7 @@ to_js(JSContext* cx, char* data, int* remaining)
     }
     else if(type == FLOAT || type == NEW_FLOAT)
     {
-        return to_js_float(cx, data, remaining, FLOAT);
+        return to_js_float(cx, data, remaining, type);
     }
     else if(type == BINARY)
     {

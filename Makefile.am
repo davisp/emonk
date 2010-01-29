@@ -18,6 +18,9 @@ DISTCLEANFILES = $(localdoc_DATA)
 
 EXTRA_DIST = AUTHORS BUGS CHANGES LICENSE NEWS NOTICE README THANKS
 
+README.gz: README.md
+	-gzip -9 < $< > $@
+
 %.gz: $(top_srcdir)/%
 	-gzip -9 < $< > $@
 

@@ -41,19 +41,19 @@ test() ->
     ok.
 
 test_no_settings() ->
-    {ok, Port} = emonk_driver:new(),
+    {ok, Port} = emonk:new(),
     etap:is(is_port(Port), true, "Returned a valid port."),
-    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port.").
+    etap:is(emonk:destroy(Port), ok, "Stopped the port.").
 
 test_valid_settings() ->
-    {ok, Port} = emonk_driver:new([{rt_max_bytes, 8388608}]),
+    {ok, Port} = emonk:new([{rt_max_bytes, 8388608}]),
     etap:is(is_port(Port), true, "Returned a valid port with settings."),
-    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port.").
+    etap:is(emonk:destroy(Port), ok, "Stopped the port.").
 
 test_ignore_settings() ->
-    {ok, Port} = emonk_driver:new([foo]),
+    {ok, Port} = emonk:new([foo]),
     etap:is(is_port(Port), true, "Returned a valid port ignoring settings."),
-    etap:is(emonk_driver:destroy(Port), ok, "Stopped the port.").
+    etap:is(emonk:destroy(Port), ok, "Stopped the port.").
 
 test_invalid_settings() ->
     etap:fun_is(
@@ -61,6 +61,6 @@ test_invalid_settings() ->
             ({'EXIT', {badarg, _}}) -> true;
             (_) -> false
         end,
-        (catch emonk_driver:new([{rt_max_bytes, -10}])),
+        (catch emonk:new([{rt_max_bytes, -10}])),
         "Invalid settings cause an error."
     ).
