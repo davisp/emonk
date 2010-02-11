@@ -12,7 +12,7 @@
 % the License.
 
 main(_) ->
-    etap:plan(28),
+    etap:plan(29),
     case (catch test()) of
         ok ->
             etap:end_tests();
@@ -52,6 +52,7 @@ test() ->
         [[]],
         [1, <<"foo">>],
         {[{<<"foo">>, [123]}]},
+        {[{<<"foo">>, [1, 2, 3]}]},
         {[{<<"foo">>, {[{<<"bar">>, true}]}}]},
         {[
             {<<"foo">>, []},

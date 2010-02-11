@@ -8,8 +8,9 @@ typedef struct _emonk_buf_t
     int used;
 } emonk_buf_t;
 
-#define OK 1
 #define ERROR 0
+#define OK 1
+#define IGNORE 2
 #define BUFPTR (buf->buf+buf->used)
 #define REQUEST(len) {if(!ensure_space(buf, (len))) return ERROR;}
 
@@ -198,10 +199,36 @@ to_erl_object(emonk_buf_t* buf, JSContext* cx, JSObject* obj)
 }
 
 int
+to_erl_from_handler(emonk_buf_t* buf, JSContext* cx, JSObject* obj)
+{
+    JSObject* func;
+    jsval tojson;
+    jsval rval;
+    
+    if(!JS_GetProperty(cx, obj, "toJSON", &tojson))
+    {
+        return ERROR;
+    }
+    
+    if(!JSVAL_IS_OBJECT(tojson)) return IGNORE;
+    func = JSVAL_TO_OBJECT(tojson);
+    if(func == NULL) return ERROR;
+    if(!JS_ObjectIsFunction(cx, func)) return IGNORE;
+
+    if(!JS_CallFunctionValue(cx, obj, tojson, 0, NULL, &rval))
+    {
+        return ERROR;
+    }
+    
+    return to_erl_intern(buf, cx, rval);
+}
+
+int
 to_erl_intern(emonk_buf_t* buf, JSContext* cx, jsval val)
 {
     JSObject* obj = NULL;
     JSType type = JS_TypeOfValue(cx, val);
+    int status = ERROR;
         
     if(val == JSVAL_NULL)
     {
@@ -237,6 +264,9 @@ to_erl_intern(emonk_buf_t* buf, JSContext* cx, jsval val)
     else if(type == JSTYPE_OBJECT)
     {
         obj = JSVAL_TO_OBJECT(val);
+        status = to_erl_from_handler(buf, cx, obj);
+        if(status != IGNORE) return status;
+        
         if(JS_IsArrayObject(cx, obj))
         {
             return to_erl_array(buf, cx, obj);
