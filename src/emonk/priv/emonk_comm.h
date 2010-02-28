@@ -38,7 +38,9 @@ typedef struct _emonk_req_t
     jsval* argv;
 } emonk_req_t;
 
-emonk_req_t* read_req_info(JSContext* cx, uint cmd, unsigned char* buf, int len);
+emonk_req_t* read_req_info(JSContext* cx, unsigned char* cmd,
+                                unsigned char* buf, int len);
+
 void* free_req_info(emonk_req_t* req);
 
 void* to_erl(JSContext* cx, jsval val, int* length);

@@ -78,10 +78,13 @@ stop(_State) ->
 call_driver(Port, Command, Data, Timeout) ->
     Token = make_call_token(),
     %io:format(standard_error, "~p~n", [term_to_binary({Token, Data})]),
-    case port_control(Port, Command, term_to_binary({Token, Data})) of
-        [0] ->
+    %Fail = false, Win = true,
+    %case port_command(Port, term_to_binary({Command, Token, Data})) of
+    Fail = [0], Win = [],
+    case port_control(Port, 0, term_to_binary({Command, Token, Data})) of
+        Fail ->
             {error, driver_error};
-        [] ->
+        Win ->
             receive
                 {Token, ok, undefined} -> {ok, undefined};
                 {Token, ok, Resp} -> {ok, Resp};

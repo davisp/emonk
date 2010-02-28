@@ -80,10 +80,11 @@ emonk_stop(ErlDrvData handle)
 }
 
 static int
-emonk_control(ErlDrvData handle, uint cmd, char* b, int l, char **rb, int rl)
+emonk_control(ErlDrvData handle, uint ignore, char* b, int l, char **rb, int rl)
 {
+    unsigned char cmd;
     emonk_drv_t* drv = (emonk_drv_t*) handle;
-    emonk_req_t* req = read_req_info(drv->vm->cx, cmd, (unsigned char*) b, l);
+    emonk_req_t* req = read_req_info(drv->vm->cx, &cmd, (unsigned char*) b, l);
 
     void* data = NULL;
     int length;
@@ -125,6 +126,42 @@ emonk_control(ErlDrvData handle, uint cmd, char* b, int l, char **rb, int rl)
     return 0;
 }
 
+static void
+emonk_outputv(ErlDrvData handle, ErlIOVec *ev)
+{
+    unsigned char cmd;
+    emonk_drv_t* drv = (emonk_drv_t*) handle;
+    ErlDrvBinary* args = ev->binv[1];
+    unsigned char* b = args->orig_bytes;
+    int l = args->orig_size;
+    emonk_req_t* req = read_req_info(drv->vm->cx, &cmd, b, l);
+
+    void* data = NULL;
+    int length;
+    int resp;
+    
+    if(cmd == 0)
+    {
+        data = vm_eval(drv->vm, req, &length);
+    }
+    else
+    {
+        data = vm_call(drv->vm, req, &length);
+    }
+    
+    if(data == NULL)
+    {
+        resp = send_undefined(drv, req);
+    }
+    else
+    {
+        resp = send_response(drv, req, data, length);
+    }
+
+    if(data != NULL) driver_free(data);
+    if(req != NULL) free_req_info(req);
+}
+
 static ErlDrvEntry
 emonk_drv_entry = {
     emonk_init,                         /* init */
@@ -138,7 +175,7 @@ emonk_drv_entry = {
     NULL,                               /* handle */
     emonk_control,                      /* control */
     NULL,                               /* timeout */
-    NULL,                               /* process */
+    emonk_outputv,                      /* outputv */
     NULL,                               /* ready_async */
     NULL,                               /* flush */
     NULL,                               /* call */

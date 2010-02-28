@@ -25,5 +25,6 @@ typedef struct _emonk_vm_t
 emonk_vm_t* init_vm(emonk_settings_t* settings);
 int stop_vm(emonk_vm_t* vm);
 void* vm_eval(emonk_vm_t* vm, emonk_req_t* req, int* length);
+void* vm_call(emonk_vm_t* vm, emonk_req_t* req, int* length);
 
 #endif // Included emonk.h

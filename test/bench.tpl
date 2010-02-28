@@ -1,3 +1,4 @@
+#!/bin/sh -e
 ## Licensed under the Apache License, Version 2.0 (the "License"); you may not
 ## use this file except in compliance with the License. You may obtain a copy of
 ## the License at
@@ -10,26 +11,9 @@
 ## License for the specific language governing permissions and limitations under
 ## the License.
 
-noinst_SCRIPTS = run bench
+SRCDIR="%abs_top_srcdir%"
+BUILDDIR="%abs_top_builddir%"
 
-DISTCLEANFILES = temp.*
+export ERL_LIBS="$BUILDDIR/src"
 
-EXTRA_DIST = \
-	001-load-modules.t \
-	002-load-driver.t
-
-run: run.tpl
-	sed -e "s|%abs_top_srcdir%|@abs_top_srcdir@|g" \
-		-e "s|%abs_top_builddir%|@abs_top_builddir@|g" \
-	> $@ < $<
-	chmod +x $@
-
-bench: bench.tpl
-	sed -e "s|%abs_top_srcdir%|@abs_top_srcdir@|g" \
-		-e "s|%abs_top_builddir%|@abs_top_builddir@|g" \
-	> $@ < $<
-	chmod +x $@
-
-check:
-	./run
-
+exec $SRCDIR/test/$1.es

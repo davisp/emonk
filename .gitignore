@@ -30,4 +30,5 @@ src/emonk/priv/emonk_drv.so
 src/emonk/priv/.deps/
 src/emonk/priv/.libs/
 src/etap/ebin/
+test/bench
 test/run
