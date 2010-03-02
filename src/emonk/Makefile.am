@@ -22,14 +22,13 @@ source_files = \
 
 compiled_files = \
 	ebin/emonk.app \
-	ebin/emonk.beam \
-	ebin/emonk_cache.beam \
-	ebin/emonk_sup.beam
+	ebin/emonk.beam
 	
 EXTRA_DIST = $(source_files)
 CLEANFILES = $(compiled_files)
 
 ebin/emonk.app: src/emonk.app.tpl
+	mkdir -p ebin/
 	cp $< $@
 
 ebin/%.beam: src/%.erl
