@@ -23,8 +23,7 @@ main(_) ->
     ok.
 
 test() ->
-    ok = emonk:start(),
-    {ok, Port} = emonk:new(),
+    {ok, Ctx} = emonk:new_context(),
 
     Tests = [
         {<<"null">>, null},
@@ -75,22 +74,22 @@ test() ->
             <<"2003-03-01T17:13:34.001Z">>
         }
     ],
-    ok = run_tests(Port, Tests),
-    test_converter(Port).
+    ok = run_tests(Ctx, Tests),
+    test_converter(Ctx).
 
 run_tests(_, []) ->
     ok;
-run_tests(Port, [{Arg, Exp} | Tests]) ->
-    {ok, Result} = emonk:eval(Port, js(Arg)),
+run_tests(Ctx, [{Arg, Exp} | Tests]) ->
+    {ok, Result} = emonk:eval(Ctx, js(Arg)),
     Msg = io_lib:format("~p", [Arg]),
     etap:is(sort(Result), [sort(Exp)], lists:flatten(Msg)),
-    run_tests(Port, Tests).
+    run_tests(Ctx, Tests).
 
-test_converter(Port) ->
+test_converter(Ctx) ->
     Smoke = <<"Date.prototype.toJSON = function() {return {\"foo\": 2.1};};">>,
     Date = <<"new Date(\"2003-03-01T17:13:34.001Z\")">>,
-    {ok, undefined} = emonk:eval(Port, Smoke),
-    {ok, Result} = emonk:eval(Port, js(Date)),
+    {ok, undefined} = emonk:eval(Ctx, Smoke),
+    {ok, Result} = emonk:eval(Ctx, js(Date)),
     etap:is(sort(Result), [{[{<<"foo">>, 2.1}]}], "Is toJSON called?"),
     ok.
 

@@ -2,20 +2,24 @@
 #ifndef EMONK_UTIL_H
 #define EMONK_UTIL_H
 
-#define RT_MAX_BYTES 1048576
-#define GC_MAX_BYTES 8388608
-#define GC_MAX_MALLOC 8388608
-#define CONTEXT_STACK 8192
-#define SETTING_MAX 1073741824
+#include <erl_nif.h>
+#include <jsapi.h>
 
-typedef struct _emonk_settings_t
-{
-    uint rt_max_bytes;
-    uint gc_max_bytes;
-    uint gc_max_malloc;
-    uint context_stack;
-} emonk_settings_t;
+#define MAX_SETTING_VALUE 2147483648
 
-int parse_settings(char* cmd, emonk_settings_t* settings);
+void report_error(JSContext* cx, const char* mesg, JSErrorReport* report);
+jsval to_js(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term);
+ERL_NIF_TERM to_erl(ErlNifEnv* env, JSContext* cx, jsval val);
+
+ERL_NIF_TERM emonk_atom(ErlNifEnv* env, const char* atom);
+ERL_NIF_TERM emonk_ok(ErlNifEnv* env, ERL_NIF_TERM value);
+ERL_NIF_TERM emonk_error(ErlNifEnv* env, ERL_NIF_TERM value);
+ERL_NIF_TERM emonk_no_memory(ErlNifEnv* env);
+ERL_NIF_TERM emonk_init_failed(ErlNifEnv* env);
+
+uint32 cfg_uint(ErlNifEnv* env, ERL_NIF_TERM pl, const char* atom, uint32 def);
+
+
+void debug_jsval(JSContext* cx, jsval val);
 
 #endif // Included util.h

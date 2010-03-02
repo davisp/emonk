@@ -15,201 +15,97 @@
 
 #include <string.h>
 
+#include <erl_nif.h>
+
 #include "emonk.h"
 #include "emonk_util.h"
 
-typedef struct _emonk_drv_t
-{
-    ErlDrvPort port;
-    ErlDrvTermData ok;
-    ErlDrvTermData error;
-    ErlDrvTermData undefined;
-    ErlDrvTermData bad_cmd;
-    emonk_vm_t* vm;
-} emonk_drv_t;
-
-int send_undefined(emonk_drv_t* drv, emonk_req_t* req);
-int send_response(emonk_drv_t* drv, emonk_req_t* req, void* data, int length);
+ErlNifResourceType* EMONK_CTX;
 
 static int
-emonk_init()
+emonk_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
+    const char* name = "emonk.Context";
+    int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
+    EMONK_CTX = enif_open_resource_type(env, name, stop_vm, flags, NULL);
+    if(EMONK_CTX == NULL) return -1;
+    
     if(!JS_CStringsAreUTF8()) JS_SetCStringsAreUTF8();
     return 0;
 }
 
-static ErlDrvData
-emonk_start(ErlDrvPort port, char *cmd)
+static ERL_NIF_TERM
+emonk_new_ctx(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    uint rt_max, gc_max, gc_last, ctx;
-    emonk_drv_t* drv = NULL;
-    ErlDrvData ret = ERL_DRV_ERROR_GENERAL;
-    emonk_settings_t settings;
-    
-    if(parse_settings(cmd, &settings) < 0)
-    {
-        ret = ERL_DRV_ERROR_BADARG;
-        goto error;
-    }
-    
-    drv = (emonk_drv_t*) driver_alloc(sizeof(emonk_drv_t));
-    if(drv == NULL) goto error;
+    emonk_vm_t* vm = NULL;
+    ERL_NIF_TERM ret;
 
-    drv->port = port;
-    drv->ok = driver_mk_atom("ok");
-    drv->error = driver_mk_atom("error");
-    drv->undefined = driver_mk_atom("undefined");
-    drv->bad_cmd = driver_mk_atom("bad_command");
-    
-    drv->vm = init_vm(&settings);
-    if(drv->vm == NULL) goto error;
-    
-    return (ErlDrvData) drv;
+    vm = (emonk_vm_t*) enif_alloc_resource(env, EMONK_CTX, sizeof(emonk_vm_t));
+    ret = enif_make_resource(env, vm);
+    enif_release_resource(env, vm);
 
-error:
-    if(drv != NULL) driver_free(drv);
-    return ret;
+    if(vm == NULL) return emonk_no_memory(env);
+    vm->env = env;
+    vm->error = 0;
+
+    if(!init_vm(vm, env, argc, argv)) return emonk_init_failed(env);
+
+    return emonk_ok(env, ret);
 }
 
-static void
-emonk_stop(ErlDrvData handle)
+static ERL_NIF_TERM
+emonk_eval(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    emonk_drv_t* drv = (emonk_drv_t*) handle;
-    stop_vm(drv->vm);
-    driver_free(drv);
-}
-
-static int
-emonk_control(ErlDrvData handle, uint ignore, char* b, int l, char **rb, int rl)
-{
-    unsigned char cmd;
-    emonk_drv_t* drv = (emonk_drv_t*) handle;
-    emonk_req_t* req = read_req_info(drv->vm->cx, &cmd, (unsigned char*) b, l);
-
-    void* data = NULL;
-    int length;
-    int resp;
-        
-    if(req == NULL)
-    {
-        *rb[0] = 0;
-        return 1;
-    }
+    emonk_vm_t* vm = NULL;
+    ErlNifBinary bin;
     
-    if(cmd == 0)
+    if(argc != 2) return enif_make_badarg(env);
+    
+    if(!enif_get_resource(env, argv[0], EMONK_CTX, (void**) &vm))
     {
-        data = vm_eval(drv->vm, req, &length);
+        return enif_make_badarg(env);
     }
     else
     {
-        data = vm_call(drv->vm, req, &length);
+        vm->env = env;
+        vm->error = 0;
     }
     
-    if(data == NULL)
+    if(!enif_inspect_binary(env, argv[1], &bin))
     {
-        resp = send_undefined(drv, req);
-    }
-    else
-    {
-        resp = send_response(drv, req, data, length);
+        return enif_make_badarg(env);
     }
 
-    if(data != NULL) driver_free(data);
-    if(req != NULL) free_req_info(req);
-    
-    if(resp < 0)
-    {
-        *rb[0] = 0;
-        return 1;
-    }
-    
-    return 0;
+    return vm_eval(env, vm, (char*) bin.data, bin.size);   
 }
 
-static void
-emonk_outputv(ErlDrvData handle, ErlIOVec *ev)
+static ERL_NIF_TERM
+emonk_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    unsigned char cmd;
-    emonk_drv_t* drv = (emonk_drv_t*) handle;
-    ErlDrvBinary* args = ev->binv[1];
-    unsigned char* b = args->orig_bytes;
-    int l = args->orig_size;
-    emonk_req_t* req = read_req_info(drv->vm->cx, &cmd, b, l);
-
-    void* data = NULL;
-    int length;
-    int resp;
+    emonk_vm_t* vm = NULL;
+    ErlNifBinary bin;
     
-    if(cmd == 0)
+    if(argc != 3) return enif_make_badarg(env);
+    
+    if(!enif_get_resource(env, argv[0], EMONK_CTX, (void**) &vm))
     {
-        data = vm_eval(drv->vm, req, &length);
+        return enif_make_badarg(env);
     }
     else
     {
-        data = vm_call(drv->vm, req, &length);
-    }
-    
-    if(data == NULL)
-    {
-        resp = send_undefined(drv, req);
-    }
-    else
-    {
-        resp = send_response(drv, req, data, length);
+        vm->env = env;
+        vm->error = 0;
     }
 
-    if(data != NULL) driver_free(data);
-    if(req != NULL) free_req_info(req);
+    return vm_call(env, vm, argv[1], argv[2]);
 }
 
-static ErlDrvEntry
-emonk_drv_entry = {
-    emonk_init,                         /* init */
-    emonk_start,                        /* startup */
-    emonk_stop,                         /* shutdown */
-    NULL,                               /* output */
-    NULL,                               /* ready_input */
-    NULL,                               /* ready_output */
-    (char *) "emonk_drv",               /* the name of the driver */
-    NULL,                               /* finish */
-    NULL,                               /* handle */
-    emonk_control,                      /* control */
-    NULL,                               /* timeout */
-    emonk_outputv,                      /* outputv */
-    NULL,                               /* ready_async */
-    NULL,                               /* flush */
-    NULL,                               /* call */
-    NULL,                               /* event */
-    ERL_DRV_EXTENDED_MARKER,            /* ERL_DRV_EXTENDED_MARKER */
-    ERL_DRV_EXTENDED_MAJOR_VERSION,     /* ERL_DRV_EXTENDED_MAJOR_VERSION */
-    ERL_DRV_EXTENDED_MAJOR_VERSION,     /* ERL_DRV_EXTENDED_MINOR_VERSION */
-    ERL_DRV_FLAG_USE_PORT_LOCKING       /* ERL_DRV_FLAGs */
+static ErlNifFunc emonk_funcs[] =
+{
+    {"new_context", 0, emonk_new_ctx},
+    {"new_context", 1, emonk_new_ctx},
+    {"eval", 2, emonk_eval},
+    {"call", 3, emonk_call}
 };
 
-DRIVER_INIT(emonk_drv) {
-  return &emonk_drv_entry;
-}
-
-int
-send_undefined(emonk_drv_t* drv, emonk_req_t* req)
-{
-    ErlDrvTermData terms[] = {
-        ERL_DRV_BUF2BINARY, (ErlDrvTermData) req->call_id, req->cid_len,
-		ERL_DRV_ATOM, req->ok ? drv->ok : drv->error,
-		ERL_DRV_ATOM, drv->undefined,
-		ERL_DRV_TUPLE, 3
-	};
-    return driver_output_term(drv->port, terms, 9);    
-}
-
-int
-send_response(emonk_drv_t* drv, emonk_req_t* req, void* data, int length)
-{
-    ErlDrvTermData terms[] = {
-        ERL_DRV_BUF2BINARY, (ErlDrvTermData) req->call_id, req->cid_len,
-		ERL_DRV_ATOM, req->ok ? drv->ok : drv->error,
-		ERL_DRV_EXT2TERM, (ErlDrvTermData) data, length,
-		ERL_DRV_TUPLE, 3
-	};
-    return driver_output_term(drv->port, terms, 10);
-}
+ERL_NIF_INIT(emonk, emonk_funcs, emonk_load, NULL, NULL, NULL)

@@ -23,8 +23,7 @@ main(_) ->
     ok.
 
 test() ->
-    ok = emonk:start(),
-    {ok, Port} = emonk:new(),
+    {ok, Ctx} = emonk:new_context(),
 
     Tests = [
         null,
@@ -60,17 +59,17 @@ test() ->
         ]},
         [-123, <<"foo">>, {[{<<"bar">>, []}]}, null]
     ],
-    run_tests(Port, Tests).
+    run_tests(Ctx, Tests).
 
 run_tests(_, []) ->
     ok;
-run_tests(Port, [E1 | Tests]) ->
+run_tests(Ctx, [E1 | Tests]) ->
     E2 = sort(E1),
-    {ok, undefined} = emonk:eval(Port, js()),
+    {ok, undefined} = emonk:eval(Ctx, js()),
     Msg = io_lib:format("Roundtrip: ~p", [E2]),
-    {ok, Result} = emonk:call(Port, <<"test">>, [E2]),
+    {ok, Result} = emonk:call(Ctx, <<"test">>, [E2]),
     etap:is(sort(Result), [E2], lists:flatten(Msg)),
-    run_tests(Port, Tests).
+    run_tests(Ctx, Tests).
 
 js() -> <<"var test = function(arg) {return [arg];};">>.
 

@@ -15,98 +15,26 @@
 
 %% @ doc This module is the entry point to start erlang_js as an OTP application.
 -module(emonk).
+-on_load(load_nif/0).
 
--behaviour(application).
+-export([new_context/0, new_context/1]).
+-export([eval/2, call/3]).
 
-%% Application callbacks
--export([start/0, start/2, stop/1]).
+load_nif() ->
+    NifPath = filename:join(code:priv_dir("emonk"), "emonk_drv"),
+    erlang:load_nif(NifPath, 0).
 
--export([new/0, new/1, destroy/1]).
--export([eval/2, eval/3, call/3, call/4]).
+new_context() ->
+    nif_error(?LINE).
 
--define(SCRIPT_TIMEOUT, 5000).
--define(PORT_OPTS, [binary]).
--define(DRIVER_NAME, "emonk_drv").
+new_context(_) ->
+    nif_error(?LINE).
 
--define(RT_MAX_BYTES, 1048576).
--define(GC_MAX_BYTES, 8388608).
--define(GC_MAX_MALLOC, 8388608).
--define(CONTEXT_STACK, 8192).
+eval(_Ctx, _Script) ->
+    nif_error(?LINE).
+    
+call(_Ctx, _Name, _Args) ->
+    nif_error(?LINE).
 
-%% @spec start() -> ok | {error, any()}
-%% @doc Starts the emonk OTP applicatio. Intended for
-%% use with the Erlang VM's -s option
-start() ->
-    application:start(emonk).
-
-%% @spec new() -> {ok, Port}
-%% @doc Create a new Port which serves as a context
-%% for executing JavaScript code.
-new() ->
-    {ok, open_port({spawn_driver, ?DRIVER_NAME}, [binary])}.
-
-new(Settings) ->
-    {ok, open_port({spawn_driver, parse_settings(Settings)}, [binary])}.
-
-destroy(Ctx) ->
-    case (catch port_close(Ctx)) of
-        true -> ok;
-        Else -> Else
-    end.
-
-eval(Port, Script) ->
-    call_driver(Port, 0, Script, ?SCRIPT_TIMEOUT).
-
-eval(Port, Script, Timeout) ->
-    call_driver(Port, 0, Script, Timeout).
-
-call(Port, FunctionName, Args) ->
-    call_driver(Port, 1, {FunctionName, Args}, ?SCRIPT_TIMEOUT).
-
-call(Port, FunctionName, Args, Timeout) ->
-    call_driver(Port, 1, {FunctionName, Args}, Timeout).
-
-%% @private
-start(_StartType, _StartArgs) ->
-    emonk_sup:start_link().
-
-%% @private
-stop(_State) ->
-    ok.
-
-%% @private
-call_driver(Port, Command, Data, Timeout) ->
-    Token = make_call_token(),
-    %io:format(standard_error, "~p~n", [term_to_binary({Token, Data})]),
-    %Fail = false, Win = true,
-    %case port_command(Port, term_to_binary({Command, Token, Data})) of
-    Fail = [0], Win = [],
-    case port_control(Port, 0, term_to_binary({Command, Token, Data})) of
-        Fail ->
-            {error, driver_error};
-        Win ->
-            receive
-                {Token, ok, undefined} -> {ok, undefined};
-                {Token, ok, Resp} -> {ok, Resp};
-                {Token, error, Error} -> {error, Error};
-                Else -> io:format(standard_error, "UNEXPECTED: ~p", [Else])
-            after Timeout ->
-                {error, timeout}
-            end
-    end.
-
-%% @private
-parse_settings(Settings) when is_list(Settings) ->
-    RtMaxBytes = proplists:get_value(rt_max_bytes, Settings, ?RT_MAX_BYTES),
-    GcMaxBytes = proplists:get_value(gc_max_bytes, Settings, ?GC_MAX_BYTES),
-    GcMaxMalloc = proplists:get_value(gc_max_malloc, Settings, ?GC_MAX_MALLOC),
-    CtxStack = proplists:get_value(context_stack, Settings, ?CONTEXT_STACK),
-    Cmd = io_lib:format(
-        "~s rt=~B gcmb=~B gcld=~B ctx=~B",
-        [?DRIVER_NAME, RtMaxBytes, GcMaxBytes, GcMaxMalloc, CtxStack]
-    ),
-    lists:flatten(Cmd).
-
-%% @private
-make_call_token() ->
-    list_to_binary(integer_to_list(erlang:phash2(erlang:make_ref()))).
+nif_error(Line) ->
+    exit({emonk_not_loaded, module, ?MODULE, line, Line}).

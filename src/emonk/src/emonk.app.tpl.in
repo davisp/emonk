@@ -1,8 +1,8 @@
 {application, emonk, [
     {description, "@package_name@"},
     {vsn, "@version@"},
-    {modules, %modules%},
-    {registered, [emonk_sup, emonk_cache]},
+    {modules, [emonk]},
+    {registered, []},
     {applications, [kernel, stdlib]},
     {mod, {emonk, []}}
 ]}.

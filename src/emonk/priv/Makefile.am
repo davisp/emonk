@@ -16,7 +16,6 @@ emonkprivlibdir = $(emonk)/priv/lib
 
 EMONK_SRCS = \
     emonk.c \
-    emonk_comm.c \
     emonk_drv.c \
     emonk_to_erl.c \
     emonk_to_js.c \

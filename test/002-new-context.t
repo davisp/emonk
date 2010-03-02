@@ -12,7 +12,7 @@
 % the License.
 
 main(_) ->
-    etap:plan(9),
+    etap:plan(4),
     case (catch test()) of
         ok ->
             etap:end_tests();
@@ -23,17 +23,6 @@ main(_) ->
     ok.
 
 test() ->
-    etap:is(emonk:start(), ok, "Started emonk driver."),
-
-    etap:fun_is(
-        fun
-            ({'EXIT', {badarg, _}}) -> true;
-            (_) -> false
-        end,
-        (catch open_port({spawn_driver, "emonk_drv foobar"}, [binary])),
-        "Opening a port with a bad settings string fails."
-    ),
-
     test_no_settings(),
     test_valid_settings(),
     test_ignore_settings(),
@@ -41,26 +30,29 @@ test() ->
     ok.
 
 test_no_settings() ->
-    {ok, Port} = emonk:new(),
-    etap:is(is_port(Port), true, "Returned a valid port."),
-    etap:is(emonk:destroy(Port), ok, "Stopped the port.").
+    etap:fun_is(
+        fun({ok, _}) -> true; (_) -> false end,
+        emonk:new_context(),
+        "Returned a valid context with no options."
+    ).
 
 test_valid_settings() ->
-    {ok, Port} = emonk:new([{rt_max_bytes, 8388608}]),
-    etap:is(is_port(Port), true, "Returned a valid port with settings."),
-    etap:is(emonk:destroy(Port), ok, "Stopped the port.").
+    etap:fun_is(
+        fun({ok, _}) -> true; (_) -> false end,
+        emonk:new_context([{rt_max_bytes, 1024*1024}]),
+        "Returned a valid context with options specified."
+    ).
 
 test_ignore_settings() ->
-    {ok, Port} = emonk:new([foo]),
-    etap:is(is_port(Port), true, "Returned a valid port ignoring settings."),
-    etap:is(emonk:destroy(Port), ok, "Stopped the port.").
+    etap:fun_is(
+        fun({ok, _}) -> true; (_) -> false end,
+        emonk:new_context(foo),
+        "Ignores invalid option specifications."
+    ).
 
 test_invalid_settings() ->
     etap:fun_is(
-        fun
-            ({'EXIT', {badarg, _}}) -> true;
-            (_) -> false
-        end,
-        (catch emonk:new([{rt_max_bytes, -10}])),
-        "Invalid settings cause an error."
+        fun({error, _}) -> true; (_) -> false end,
+        emonk:new_context([{rt_max_bytes, -10}]),
+        "Invalid option values cause an error."
     ).

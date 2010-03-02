@@ -1,184 +1,44 @@
 
-#include "emonk_comm.h"
+#include <string.h>
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-
-jschar* to_js_key(JSContext* cx, char* data, int* remaining, size_t* charslen);
-jsval to_js_object(JSContext* cx, char* data, int* remaining);
+#include "emonk_util.h"
 
 jsval
-to_js_special(JSContext* cx, char* data, int* remaining)
+to_js_special(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
 {
-    unsigned int length;
-    int before;
-    size_t charslen;
-    jschar* chars;
-    JSString* str;
+    JSString* str = NULL;
+    char atom[512]; // Pretty sure there's a 256 byte limit
 
-    memcpy(&length, data, 2);
-    length = ntohs(length);
-    *remaining -= (2 + length);
-    data += 2;
-    
-    if(strncmp(data, "true", MIN(length, 4)) == 0)
+    if(!enif_get_atom(env, term, atom, 512))
+    {
+        return JSVAL_VOID;
+    }
+    else if(strcmp(atom, "true") == 0)
     {
         return JSVAL_TRUE;
     }
-    else if(strncmp(data, "false", MIN(length, 5)) == 0)
+    else if(strcmp(atom, "false") == 0)
     {
         return JSVAL_FALSE;
     }
-    else if(strncmp(data, "null", MIN(length, 4)) == 0)
+    else if(strcmp(atom, "null") == 0)
     {
         return JSVAL_NULL;
     }
     else
     {
-        // Undo
-        data -= 3;
-        *remaining += (3+length);
-
-        chars = to_js_key(cx, data, remaining, &charslen);
-        if(chars == NULL) return JSVAL_VOID;
-
-        str = JS_NewUCString(cx, chars, charslen);
-        if(!str)
-        {
-            JS_free(cx, chars);
-            return JSVAL_VOID;
-        }
-
+        str = JS_NewString(cx, atom, strlen(atom));
+        if(str == NULL) return JSVAL_VOID;
         return STRING_TO_JSVAL(str);
     }
 }
 
 jsval
-to_js_int(JSContext* cx, char* data, int* remaining, char type)
+to_js_number(JSContext* cx, double value)
 {
-    unsigned int val;
     jsval ret;
 
-    if(type == SMALL_INTEGER)
-    {
-        val = (unsigned char) data[0];
-        *remaining -= 1;
-        return INT_TO_JSVAL(val);
-    }
-    else
-    {
-        memcpy(&val, data, 4);
-        *remaining -= 4;
-        val = ntohl(val);
-        if(INT_FITS_IN_JSVAL(val))
-        {
-            return INT_TO_JSVAL(val);
-        }
-        else
-        {
-            if(!JS_NewNumberValue(cx, val, &ret))
-            {
-                return JSVAL_VOID;
-            }
-            
-            return ret;
-        }
-    }
-}
-
-jsval
-to_js_big_int(JSContext* cx, char* data, int* remaining, char type)
-{
-    // Note to self, check for overflow.
-    
-    jsval ret;
-    int32_t val = 0;
-    int length = 0;
-    unsigned int factor;
-    char sign = 0;
-    int i;
-        
-    if(type == SMALL_BIG)
-    {
-        length = (unsigned char) data[0];
-        *remaining -= 1;
-        data += 1;
-    }
-    else
-    {
-        memcpy(&val, data, 4);
-        val = ntohl(val);
-        *remaining -= 4;
-        data += 4;
-    }
-    
-    sign = data[0];
-    *remaining -= 1;
-    data += 1;
-    
-    if(length > 4)
-    {
-        if(sign == 0)
-        {
-            return JS_GetPositiveInfinityValue(cx);
-        }
-        else
-        {
-            return JS_GetNegativeInfinityValue(cx);
-        }
-    }
-    
-    for(i = 0; i < length; i++)
-    {
-        factor = (unsigned int) data[i];
-        val += factor << (i*8);
-    }
-    
-    if(sign == 1) val *= -1;
-        
-    if(INT_FITS_IN_JSVAL(val))
-    {
-        return INT_TO_JSVAL(val);
-    }
-    else
-    {
-        if(!JS_NewNumberValue(cx, val, &ret))
-        {
-            return JSVAL_VOID;
-        }
-        
-        return ret;
-    }
-}
-
-jsval
-to_js_float(JSContext* cx, char* data, int* remaining, char type)
-{
-    double val;
-    unsigned int tmp[2];
-    jsval ret = JSVAL_VOID;
-    
-    if(type == NEW_FLOAT)
-    {
-        if(2 == htonl(2))
-        {
-            memcpy(&val, data, 8);
-        }
-        else
-        {
-            memcpy(tmp+1, data, 4);
-            memcpy(tmp, data+4, 4);
-            tmp[0] = ntohl(tmp[0]);
-            tmp[1] = ntohl(tmp[1]);
-            val = ((float*) tmp)[0];
-        }
-    }
-    else
-    {
-        sscanf(data, "%lf", &val);
-        *remaining -= 31;
-    }
-
-    if(!JS_NewNumberValue(cx, val, &ret))
+    if(!JS_NewNumberValue(cx, value, &ret))
     {
         return JSVAL_VOID;
     }
@@ -187,268 +47,206 @@ to_js_float(JSContext* cx, char* data, int* remaining, char type)
 }
 
 jsval
-to_js_string(JSContext* cx, char* data, int* remaining)
+to_js_string(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
 {
+    ErlNifBinary bin;
     int length;
     JSString* str;
     jschar* chars;
     size_t charslen;
     
-    memcpy(&length, data, 4);
-    length = ntohl(length);
-    
-    if(!JS_DecodeBytes(cx, data+4, length+1, NULL, &charslen))
+    if(!enif_inspect_binary(env, term, &bin))
     {
         return JSVAL_VOID;
     }
     
+    if(!JS_DecodeBytes(cx, bin.data, bin.size, NULL, &charslen))
+    {
+        return JSVAL_VOID;
+    }
+        
     chars = JS_malloc(cx, (charslen + 1) * sizeof(jschar));
     if(chars == NULL) return JSVAL_VOID;
     
-    if(!JS_DecodeBytes(cx, data+4, length+1, chars, &charslen))
+    if(!JS_DecodeBytes(cx, bin.data, bin.size, chars, &charslen))
     {
         JS_free(cx, chars);
         return JSVAL_VOID;
     }
     chars[charslen] = '\0';
     
-    str = JS_NewUCString(cx, chars, charslen - 1);
+    str = JS_NewUCString(cx, chars, charslen);
     if(!str)
     {
         JS_free(cx, chars);
         return JSVAL_VOID;
     }
 
-    *remaining -= (4 + length);
     return STRING_TO_JSVAL(str);
 }
 
 jsval
-to_js_array(JSContext* cx, char* data, int* remaining, char type)
-{
-    int length;
-    unsigned int ulen;
-    JSObject* ret;
-    jsval val;
-    int left;
-    int i;
-
-    if(type == STRING)
-    {
-        memcpy(&ulen, data, 2);
-        length = ntohs(ulen);
-        *remaining -= 2;
-        data += 2;
-    }
-    else
-    {
-        memcpy(&length, data, 4);
-        *remaining -= 4;
-        data += 4;
-        length = ntohl(length);
-    }
-
-    ret = JS_NewArrayObject(cx, 0, NULL);
-    if(ret == NULL) return JSVAL_VOID;
-
-    for(i = 0; i < length; i++)
-    {
-        if(type == STRING) // list of one byte integers.
-        {
-            val = to_js_int(cx, data, remaining, SMALL_INTEGER);
-            data += 1;
-        }
-        else
-        {
-            left = *remaining;
-            val = to_js(cx, data, remaining);
-            data += (left - *remaining);
-        }
-
-        if(val == JSVAL_VOID) return val;
-        JS_SetElement(cx, ret, i, &val);
-    }
-    
-    if(type == LIST && data[0] != NIL)
-    {
-        return JSVAL_VOID;
-    }
-    else if(type == LIST)
-    {
-        *remaining -= 1;
-    }
-    
-    return OBJECT_TO_JSVAL(ret);
-}
-
-jsval
-to_js_empty_array(JSContext* cx, char* data, int* remaining)
+to_js_empty_array(JSContext* cx)
 {
     JSObject* ret = JS_NewArrayObject(cx, 0, NULL);
     if(ret == NULL) return JSVAL_VOID;
     return OBJECT_TO_JSVAL(ret);
 }
 
-jschar*
-to_js_key(JSContext* cx, char* data, int* remaining, size_t* charslen)
-{
-    char type;
-    size_t length;
-    unsigned short atomlen;
-    jschar* chars;
-    
-    type = data[0];
-    *remaining -= 1;
-    data += 1;
-    
-    if(type == BINARY)
-    {
-        memcpy(&length, data, 4);
-        length = ntohl(length);
-        *remaining -= 4;
-        data += 4;
-    }
-    else if(type == ATOM)
-    {
-        memcpy(&atomlen, data, 2);
-        atomlen = ntohs(atomlen);
-        length = (size_t) atomlen;
-        *remaining -= 2;
-        data += 2;
-    }
-    else
-    {
-        return NULL;
-    }
-    
-    if(!JS_DecodeBytes(cx, data, length, NULL, charslen))
-    {
-        return NULL;
-    }
-    
-    chars = JS_malloc(cx, (*charslen + 1) * sizeof(jschar));
-    if(chars == NULL) return NULL;
-    
-    if(!JS_DecodeBytes(cx, data, length, chars, charslen))
-    {
-        JS_free(cx, chars);
-        return NULL;
-    }
-    chars[*charslen] = '\0';
-    
-    *remaining -= length;
-    return chars;
-}
-
 jsval
-to_js_object(JSContext* cx, char* data, int* remaining)
+to_js_array(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM head, ERL_NIF_TERM tail)
 {
-    int length;
     JSObject* ret;
-    jschar* key;
-    size_t klen;
     jsval val;
-    int i;
-    int before;
-   
-    if(data[0] != 1) return JSVAL_VOID;
-    *remaining -= 1;
-    data += 1;
-        
-    ret = JS_NewObject(cx, NULL, NULL, NULL);
+    jsint i;
+
+    ret = JS_NewArrayObject(cx, 0, NULL);
     if(ret == NULL) return JSVAL_VOID;
 
-    // Empty object
-    if(data[0] == NIL)
-    {
-        *remaining -= 1;
-        return OBJECT_TO_JSVAL(ret);
-    }
-
-    if(data[0] != LIST) return JSVAL_VOID;
-    memcpy(&length, data+1, 4);
-    length = ntohl(length);
-    *remaining -= 5;
-    data += 5;
-    
-    for(i = 0; i < length; i++)
-    {
-        if(data[0] != SMALL_TUPLE) return JSVAL_VOID;
-        if(data[1] != 2) return JSVAL_VOID;
-        *remaining -= 2;
-        data += 2;
-
-        before = *remaining;
-        key = to_js_key(cx, data, remaining, &klen);
-        if(key == NULL) return JSVAL_VOID;
-        data += before - *remaining;
-        
-        before = *remaining;
-        val = to_js(cx, data, remaining);
-        if(val == JSVAL_VOID)
-        {
-            JS_free(cx, key);
-            return JSVAL_VOID;
-        }
-        data += before - *remaining;
-        
-        if(!JS_SetUCProperty(cx, ret, key, klen, &val))
-        {
-            JS_free(cx, key);
-            return JSVAL_VOID;
-        }
-        
-        JS_free(cx, key);
-    }
-    
-    if(data[0] != NIL)
-    {
-        return JSVAL_VOID;
-    }
-    *remaining -= 1;
+    i = 0;
+    do {
+        val = to_js(env, cx, head);
+        if(val == JSVAL_VOID) return JSVAL_VOID;
+        if(!JS_SetElement(cx, ret, i, &val)) return JSVAL_VOID;
+        i += 1;
+    } while(enif_get_list_cell(env, tail, &head, &tail));
     
     return OBJECT_TO_JSVAL(ret);
 }
 
 jsval
-to_js(JSContext* cx, char* data, int* remaining)
+to_js_key(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
 {
-    char type = data[0];
-    data += 1;
-    *remaining -= 1;
+    if(enif_is_atom(env, term))
+    {
+        return to_js_special(env, cx, term);
+    }
+    else if(enif_is_binary(env, term))
+    {
+        return to_js_string(env, cx, term);
+    }
+    else
+    {
+        return JSVAL_VOID;
+    }
+}
+
+jsval
+to_js_object(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM list)
+{
+    JSObject* ret;
+    jsval kval;
+    jsval vval;
+    jsid idp;
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail;
+    const ERL_NIF_TERM* pair;
+    int arity;
+
+    ret = JS_NewObject(cx, NULL, NULL, NULL);
+    if(ret == NULL) return JSVAL_VOID;
+    
+    if(enif_is_empty_list(env, list))
+    {
+        return OBJECT_TO_JSVAL(ret);
+    }
+
+    if(!enif_get_list_cell(env, list, &head, &tail))
+    {
+        return JSVAL_VOID;
+    }
+
+    do {
+        if(!enif_get_tuple(env, head, &arity, &pair))
+        {
+            return JSVAL_VOID;
+        }
         
-    if(type == ATOM)
+        if(arity != 2)
+        {
+            return JSVAL_VOID;
+        }
+        
+        kval = to_js_key(env, cx, pair[0]);
+        if(kval == JSVAL_VOID) return JSVAL_VOID;
+        if(!JS_ValueToId(cx, kval, &idp)) return JSVAL_VOID;
+        vval = to_js(env, cx, pair[1]);
+        if(vval == JSVAL_VOID) return JSVAL_VOID;
+        
+        if(!JS_SetPropertyById(cx, ret, idp, &vval))
+        {
+            return JSVAL_VOID;
+        }
+    } while(enif_get_list_cell(env, tail, &head, &tail));
+    
+    return OBJECT_TO_JSVAL(ret);
+}
+
+jsval
+to_js(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
+{
+    int intval;
+    unsigned int uintval;
+    long longval;
+    unsigned long ulongval;
+    double doubleval;
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail;
+    ERL_NIF_TERM* tuple;
+    int arity;
+    
+    if(enif_is_atom(env, term))
     {
-        return to_js_special(cx, data, remaining);
-    }
-    else if(type == SMALL_INTEGER || type == INTEGER)
-    {
-        return to_js_int(cx, data, remaining, type);
-    }
-    else if(type == SMALL_BIG || type == LARGE_BIG)
-    {
-        return to_js_big_int(cx, data, remaining, type);
-    }
-    else if(type == FLOAT || type == NEW_FLOAT)
-    {
-        return to_js_float(cx, data, remaining, type);
-    }
-    else if(type == BINARY)
-    {
-        return to_js_string(cx, data, remaining);
-    }
-    else if(type == STRING || type == LIST)
-    {
-        return to_js_array(cx, data, remaining, type);
-    }
-    else if(type == NIL)
-    {
-        return to_js_empty_array(cx, data, remaining);
-    }
-    else if(type == SMALL_TUPLE)
-    {
-        return to_js_object(cx, data, remaining);
+        return to_js_special(env, cx, term);
     }
     
+    if(enif_is_binary(env, term))
+    {
+        return to_js_string(env, cx, term);
+    }
+    
+    if(enif_is_empty_list(env, term))
+    {
+        return to_js_empty_array(cx);
+    }
+    
+    if(enif_get_int(env, term, &intval))
+    {
+        return to_js_number(cx, (double) intval);
+    }
+    
+    if(enif_get_uint(env, term, &uintval))
+    {
+        return to_js_number(cx, (double) uintval);
+    }
+    
+    if(enif_get_long(env, term, &longval))
+    {
+        return to_js_number(cx, (double) longval);
+    }
+    
+    if(enif_get_ulong(env, term, &ulongval))
+    {
+        return to_js_number(cx, (double) ulongval);
+    }
+    
+    if(enif_get_double(env, term, &doubleval))
+    {
+        return to_js_number(cx, doubleval);
+    }
+    
+    if(enif_get_list_cell(env, term, &head, &tail))
+    {
+        return to_js_array(env, cx, head, tail);
+    }
+    
+    if(enif_get_tuple(env, term, &arity, &tuple))
+    {
+        if(arity == 1)
+        {
+            return to_js_object(env, cx, tuple[0]);
+        }
+    }
+
     return JSVAL_VOID;
 }

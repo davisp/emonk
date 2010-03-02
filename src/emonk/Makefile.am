@@ -18,9 +18,7 @@ emonkebin_DATA = $(compiled_files)
 
 source_files = \
 	src/emonk.app.in \
-	src/emonk.erl \
-	src/emonk_cache.erl \
-	src/emonk_sup.erl
+	src/emonk.erl
 
 compiled_files = \
 	ebin/emonk.app \
@@ -32,9 +30,7 @@ EXTRA_DIST = $(source_files)
 CLEANFILES = $(compiled_files)
 
 ebin/emonk.app: src/emonk.app.tpl
-	@mkdir -p ebin
-	modules=`find ./src -name "*.erl" -exec basename {} .erl \; | tr '\n' ',' | sed "s/,$$//"`; \
-	sed -e "s|%modules%|$$modules|g" > $@ < $<
+	cp $< $@
 
 ebin/%.beam: src/%.erl
 	@mkdir -p ebin

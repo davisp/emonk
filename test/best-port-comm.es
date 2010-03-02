@@ -12,26 +12,23 @@
 % the License.
 
 main(_) ->
-    io:format("Starting driver.~n"),
-    ok = emonk:start(),
-    io:format("Getting port.~n"),
-    {ok, Port} = emonk:new(),
+    {ok, Ctx} = emonk:new_context(),
 
     io:format("Evaluating script.~n"),
     Script = <<"var echo = function(arg) {return [arg];};">>,
-    {ok, _} = emonk:eval(Port, Script),
+    {ok, _} = emonk:eval(Ctx, Script),
 
     io:format("Bulding payload.~n"),
     Term = data(1024*64, []),
 
     io:format("Running test.~n"),
-    timeit(fun() -> flood(Port, Term, 1000) end).
+    timeit(fun() -> flood(Ctx, Term, 1000) end).
 
 flood(_, _, 0) ->
     ok;
-flood(Port, Term, Count) ->
-    {ok, _} = emonk:call(Port, <<"echo">>, [Term]),
-    flood(Port, Term, Count-1).
+flood(Ctx, Term, Count) ->
+    {ok, _} = emonk:call(Ctx, <<"echo">>, [Term]),
+    flood(Ctx, Term, Count-1).
 
 timeit(Func) ->
     Before = erlang:now(),

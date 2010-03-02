@@ -14,13 +14,8 @@
 % Test that we can load each module.
 
 main(_) ->
-    etap:plan(3),
-    Modules = [
-        emonk,
-        emonk_cache,
-        emonk_sup
-    ],
-
+    etap:plan(1),
+    Modules = [emonk],
     LoadFun = fun(Module) ->
         etap_can:loaded_ok(Module, lists:concat(["Loaded: ", Module]))
     end,

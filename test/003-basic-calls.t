@@ -23,81 +23,71 @@ main(_) ->
     ok.
 
 test() ->
-    ok = emonk:start(),
-    {ok, Port} = emonk:new(),
+    {ok, Ctx} = emonk:new_context(),
 
-    test_eval_ok(Port),
-    test_call_ok(Port),
+    test_eval_ok(Ctx),
+    test_call_ok(Ctx),
 
-    test_eval_undefined(Port),
-    test_call_undefined(Port),
+    test_eval_undefined(Ctx),
+    test_call_undefined(Ctx),
     
-    test_eval_error(Port),
-    test_call_error(Port),
+    test_eval_error(Ctx),
+    test_call_error(Ctx),
     ok.
 
-test_eval_ok(Port) ->
+test_eval_ok(Ctx) ->
     etap:is(
-        emonk:eval(Port, <<"var x = 2; x*3;">>),
+        emonk:eval(Ctx, <<"var x = 2; x*3;">>),
         {ok, 6},
         "Successful roundtrip through the JS vm."
     ).
 
-test_call_ok(Port) ->
-    {ok, undefined} = emonk:eval(Port, <<"var g = function(x) {return x*2};">>),
+test_call_ok(Ctx) ->
+    {ok, undefined} = emonk:eval(Ctx, <<"var g = function(x) {return x*2};">>),
     etap:is(
-        emonk:call(Port, <<"g">>, [6]),
+        emonk:call(Ctx, <<"g">>, [6]),
         {ok, 12},
         "Successful function call round trip with an argument string."
     ),
     
     etap:is(
-        emonk:call(Port, <<"g">>, [600, foo]),
+        emonk:call(Ctx, <<"g">>, [600, foo]),
         {ok, 1200},
         "Successful call roundtrip with an argument list."
     ).
 
-test_eval_undefined(Port) ->
+test_eval_undefined(Ctx) ->
     etap:is(
-        emonk:eval(Port, <<"var x = function() {};">>),
+        emonk:eval(Ctx, <<"var x = function() {};">>),
         {ok, undefined},
         "Successfully ignored non-JSON response."
     ).
 
-test_call_undefined(Port) ->
-    {ok, undefined} = emonk:eval(Port, <<"var h = function(x) {return g};">>),
+test_call_undefined(Ctx) ->
+    {ok, undefined} = emonk:eval(Ctx, <<"var h = function(x) {return g};">>),
     etap:is(
-        emonk:call(Port, <<"h">>, []),
+        emonk:call(Ctx, <<"h">>, []),
         {ok, undefined},
         "Successfully ignored non-JSON response."
     ).
 
-test_eval_error(Port) ->
+test_eval_error(Ctx) ->
     etap:fun_is(
-        fun
-            ({error, {_, _, _}}) -> true;
-            (_) -> false
-        end,
-        emonk:eval(Port, <<"f * 3">>),
+        fun({error, {_, _, _}}) -> true; (_) -> false end,
+        emonk:eval(Ctx, <<"f * 3">>),
         "Reported the undefined error."
     ),
     
     etap:fun_is(
-        fun
-            ({error, {_, _, _}}) -> true;
-            (_) -> false
-        end,
-        emonk:eval(Port, <<"throw \"foo\";">>),
+        fun({error, {_, _, _}}) -> true; (_) -> false end,
+        emonk:eval(Ctx, <<"throw \"foo\";">>),
         "Reported the thrown exception."
     ).
 
-test_call_error(Port) ->
-    {ok, undefined} = emonk:eval(Port, <<"var k = function(x) {throw(2);};">>),
+test_call_error(Ctx) ->
+    {ok, undefined} = emonk:eval(Ctx, <<"var k = function(x) {throw(2);};">>),
     etap:fun_is(
-        fun
-            ({error, {_, _, _}}) -> true;
-            (_E) -> false
-        end,
-        emonk:call(Port, <<"k">>, []),
+        fun({error, {_, _, _}}) -> true; (_E) -> false end,
+        emonk:call(Ctx, <<"k">>, []),
         "Reported a thrown error."
     ).
