@@ -1,6 +1,6 @@
 {application, emonk, [
-    {description, "@package_name@"},
-    {vsn, "@version@"},
+    {description, "Emonk - Spidermonkey JavaScript bindings."},
+    {vsn, "0.0.1"},
     {modules, [emonk]},
     {registered, []},
     {applications, [kernel, stdlib]},

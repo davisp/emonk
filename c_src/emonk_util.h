@@ -3,9 +3,9 @@
 #define EMONK_UTIL_H
 
 #include <erl_nif.h>
-#include <jsapi.h>
+#include <js/jsapi.h>
 
-#define MAX_SETTING_VALUE 2147483648
+#define MAX_SETTING_VALUE 2147483648u
 
 void report_error(JSContext* cx, const char* mesg, JSErrorReport* report);
 jsval to_js(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term);

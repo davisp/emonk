@@ -21,14 +21,14 @@ to_erl_string(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
     JSString *str;
     ErlNifBinary bin;
     const char* data;
-    size_t len, netlen;
+    size_t len;
 
     str = JS_ValueToString(cx, val);
     data = JS_GetStringBytesZ(cx, str);
     if(data == NULL) return ERROR;
     len = strlen(data);
 
-    if(!enif_alloc_binary(env, len, &bin))
+    if(!enif_alloc_binary(len, &bin))
     {
         return ERROR;
     }
@@ -67,7 +67,7 @@ to_erl_array(ErlNifEnv* env, JSContext* cx, JSObject* obj, ERL_NIF_TERM* term)
     
     if(!JS_GetArrayLength(cx, obj, &length)) return ERROR;
     
-    array = (ERL_NIF_TERM*) enif_alloc(env, length * sizeof(ERL_NIF_TERM));
+    array = (ERL_NIF_TERM*) enif_alloc(length * sizeof(ERL_NIF_TERM));
     if(array == NULL) goto done;
 
     for(i = 0; i < length; i++)
@@ -80,7 +80,7 @@ to_erl_array(ErlNifEnv* env, JSContext* cx, JSObject* obj, ERL_NIF_TERM* term)
     ret = OK;
 
 done:
-    if(array != NULL) enif_free(env, array);
+    if(array != NULL) enif_free(array);
     return ret;
 }
 
@@ -108,7 +108,7 @@ to_erl_object(ErlNifEnv* env, JSContext* cx, JSObject* obj, ERL_NIF_TERM* term)
         length += 1;
     }
     
-    array = enif_alloc(env, length * sizeof(ERL_NIF_TERM));
+    array = enif_alloc(length * sizeof(ERL_NIF_TERM));
     if(array == NULL) goto done;
     
     iter = JS_NewPropertyIterator(cx, obj);
@@ -135,7 +135,7 @@ to_erl_object(ErlNifEnv* env, JSContext* cx, JSObject* obj, ERL_NIF_TERM* term)
     }
 
 done:
-    if(array != NULL) enif_free(env, array);
+    if(array != NULL) enif_free(array);
     return ret;
 }
 
@@ -168,9 +168,7 @@ int
 to_erl_intern(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
 {
     JSObject* obj = NULL;
-    ERL_NIF_TERM handled;
     JSType type = JS_TypeOfValue(cx, val);
-    int status = ERROR;
         
     if(val == JSVAL_NULL)
     {

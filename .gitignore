@@ -1,34 +1,3 @@
-# Configure Related
-Makefile
-Makefile.in
-acinclude.m4
-aclocal.m4
-autom4te.cache/
-build-aux/
-config.h
-config.h.in
-config.h.in~
-config.log
-config.status
-configure
-libtool
-priv/.deps/
-src/emonk/src/emonk.app.tpl
-stamp-h1
-
-# Build Related
-AUTHORS.gz
-BUGS.gz
-CHANGES.gz
-NEWS.gz
-README.gz
-THANKS.gz
-src/emonk/ebin/
-src/emonk/priv/*.la
-src/emonk/priv/*.lo
-src/emonk/priv/emonk_drv.so
-src/emonk/priv/.deps/
-src/emonk/priv/.libs/
-src/etap/ebin/
-test/bench
-test/run
+*.beam
+*.o
+*.so

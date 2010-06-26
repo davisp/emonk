@@ -24,8 +24,8 @@ report_error(JSContext* cx, const char* mesg, JSErrorReport* report)
     if(mesg == NULL) mesg = "";
     if(report->linebuf == NULL) report->linebuf = "";
 
-    if(!enif_alloc_binary(vm->env, strlen(mesg), &bmesg)) return;
-    if(!enif_alloc_binary(vm->env, strlen(report->linebuf), &bsrc)) return;
+    if(!enif_alloc_binary(strlen(mesg), &bmesg)) return;
+    if(!enif_alloc_binary(strlen(report->linebuf), &bsrc)) return;
 
     memcpy(bmesg.data, mesg, strlen(mesg));
     memcpy(bsrc.data, report->linebuf, strlen(report->linebuf));
@@ -42,7 +42,7 @@ emonk_atom(ErlNifEnv* env, const char* atom)
 {
     ERL_NIF_TERM ret;
     
-    if(enif_make_existing_atom(env, atom, &ret)) return ret;
+    if(enif_make_existing_atom(env, atom, &ret, ERL_NIF_LATIN1)) return ret;
 
     return enif_make_atom(env, atom);
 }
@@ -90,7 +90,7 @@ cfg_uint(ErlNifEnv* env, ERL_NIF_TERM pl, const char* atom, uint32 def)
     
     do {
         if(!enif_get_tuple(env, head, &arity, &tuple)) continue;
-        if(!enif_get_atom(env, tuple[0], key, 512)) continue;
+        if(!enif_get_atom(env, tuple[0], key, 512, ERL_NIF_LATIN1)) continue;
         if(strcmp(key, atom) != 0) continue;
         if(!enif_get_uint(env, tuple[1], &ret)) return MAX_SETTING_VALUE + 1;
         return ret;

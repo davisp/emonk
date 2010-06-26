@@ -9,7 +9,7 @@ to_js_special(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
     JSString* str = NULL;
     char atom[512]; // Pretty sure there's a 256 byte limit
 
-    if(!enif_get_atom(env, term, atom, 512))
+    if(!enif_get_atom(env, term, atom, 512, ERL_NIF_LATIN1))
     {
         return JSVAL_VOID;
     }
@@ -50,7 +50,6 @@ jsval
 to_js_string(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
 {
     ErlNifBinary bin;
-    int length;
     JSString* str;
     jschar* chars;
     size_t charslen;
@@ -60,7 +59,7 @@ to_js_string(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
         return JSVAL_VOID;
     }
     
-    if(!JS_DecodeBytes(cx, bin.data, bin.size, NULL, &charslen))
+    if(!JS_DecodeBytes(cx, (char*) bin.data, bin.size, NULL, &charslen))
     {
         return JSVAL_VOID;
     }
@@ -68,7 +67,7 @@ to_js_string(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
     chars = JS_malloc(cx, (charslen + 1) * sizeof(jschar));
     if(chars == NULL) return JSVAL_VOID;
     
-    if(!JS_DecodeBytes(cx, bin.data, bin.size, chars, &charslen))
+    if(!JS_DecodeBytes(cx, (char*) bin.data, bin.size, chars, &charslen))
     {
         JS_free(cx, chars);
         return JSVAL_VOID;
@@ -192,7 +191,7 @@ to_js(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
     double doubleval;
     ERL_NIF_TERM head;
     ERL_NIF_TERM tail;
-    ERL_NIF_TERM* tuple;
+    const ERL_NIF_TERM* tuple;
     int arity;
     
     if(enif_is_atom(env, term))

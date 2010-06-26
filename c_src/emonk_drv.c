@@ -1,18 +1,3 @@
-/* author Kevin Smith <ksmith@basho.com>
-   copyright 2009-2010 Basho Technologies
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License. */
-
 #include <string.h>
 
 #include <erl_nif.h>
@@ -25,9 +10,10 @@ ErlNifResourceType* EMONK_CTX;
 static int
 emonk_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
-    const char* name = "emonk.Context";
+    const char* mod = "emonk";
+    const char* name = "Context";
     int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
-    EMONK_CTX = enif_open_resource_type(env, name, stop_vm, flags, NULL);
+    EMONK_CTX = enif_open_resource_type(env, mod, name, stop_vm, flags, NULL);
     if(EMONK_CTX == NULL) return -1;
     
     if(!JS_CStringsAreUTF8()) JS_SetCStringsAreUTF8();
@@ -40,9 +26,9 @@ emonk_new_ctx(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     emonk_vm_t* vm = NULL;
     ERL_NIF_TERM ret;
 
-    vm = (emonk_vm_t*) enif_alloc_resource(env, EMONK_CTX, sizeof(emonk_vm_t));
+    vm = (emonk_vm_t*) enif_alloc_resource(EMONK_CTX, sizeof(emonk_vm_t));
     ret = enif_make_resource(env, vm);
-    enif_release_resource(env, vm);
+    enif_release_resource(vm);
 
     if(vm == NULL) return emonk_no_memory(env);
     vm->env = env;
@@ -83,7 +69,6 @@ static ERL_NIF_TERM
 emonk_call(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     emonk_vm_t* vm = NULL;
-    ErlNifBinary bin;
     
     if(argc != 3) return enif_make_badarg(env);
     

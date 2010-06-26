@@ -90,7 +90,6 @@ ERL_NIF_TERM
 vm_eval(ErlNifEnv* env, emonk_vm_t* vm, const char* script, unsigned int length)
 {
     ERL_NIF_TERM ret;
-    void* error;
     jsval rval;
     int cnt;
     int i;
@@ -197,7 +196,6 @@ vm_call(ErlNifEnv* env, emonk_vm_t* vm, ERL_NIF_TERM name, ERL_NIF_TERM argv)
         ret = emonk_ok(env, to_erl(env, vm->cx, rval));
     }
 
-done:
     JS_MaybeGC(vm->cx);
     END_REQ(vm->cx);
     return ret;

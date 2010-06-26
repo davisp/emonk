@@ -1,10 +1,6 @@
 Emonk AUTHORS
 =============
-
-Thanks to Kevin Smith for his work on erlang_js of which
-this work is a direct derivation.
-
- * Kevin Smith <ksmith@basho.com>
+ 
  * Paul Joseph Davis <paul.joseph.davis@gmail.com>
 
-For a list of other credits see the `THANKS` file.
+
