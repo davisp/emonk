@@ -8,7 +8,7 @@ TEST_SUPPORT = \
 all:
 	./rebar compile
 
-check: $(TEST_SUPPORT)
+check: all $(TEST_SUPPORT)
 	prove test/*.t
 
 clean:
