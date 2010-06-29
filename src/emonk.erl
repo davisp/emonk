@@ -1,42 +1,53 @@
-%% @author Kevin Smith <ksmith@basho.com>
-%% @author Paul J. Davis <paul.joseph.davis@gmail.com>
-%% @copyright 2009-2010 Basho Technologies
-%% @copyright 2010 Paul J. Davis
-%%
-%%    Licensed under the Apache License, Version 2.0 (the "License");
-%%    you may not use this file except in compliance with the License.
-%%    You may obtain a copy of the License at
-%%
-%%        http://www.apache.org/licenses/LICENSE-2.0
-%%
-%%    Unless required by applicable law or agreed to in writing, software
-%%    distributed under the License is distributed on an "AS IS" BASIS,
-%%    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%%    See the License for the specific language governing permissions and
-%%    limitations under the License.
 
 -module(emonk).
 -on_load(init/0).
 
--export([new_context/0, new_context/1]).
+
+-export([add_worker/0, rem_worker/0, num_workers/0]).
+-export([create_ctx/0, create_ctx/1]).
 -export([eval/2, call/3]).
+
 
 -define(APPNAME, emonk).
 -define(LIBNAME, emonk).
+-define(CTX_STACK, 8192).
 
-new_context() ->
+add_worker() ->
     not_loaded(?LINE).
 
-new_context(_) ->
+rem_worker() ->
     not_loaded(?LINE).
 
-eval(_Ctx, _Script) ->
-    not_loaded(?LINE).
-    
-call(_Ctx, _Name, _Args) ->
+num_workers() ->
     not_loaded(?LINE).
 
-% Private API
+create_ctx() ->
+    create_ctx(?CTX_STACK).
+
+create_ctx(_) ->
+    not_loaded(?LINE).
+
+eval(Ctx, Script) ->
+    Ref = make_ref(),
+    eval(Ctx, Ref, self(), Script),
+    receive
+        {Ref, Resp} -> Resp
+    end.
+
+eval(_Ctx, _Ref, _Dest, _Script) ->
+    not_loaded(?LINE).
+
+call(Ctx, Name, Args) ->
+    Ref = make_ref(),
+    call(Ctx, Ref, self(), Name, Args),
+    receive
+        {Ref, Resp} -> Resp
+    end.
+
+call(_Ctx, _Ref, _Dest, _Name, _Args) ->
+    not_loaded(?LINE).
+
+%% Internal API
 
 init() ->
     SoName = case code:priv_dir(?APPNAME) of
@@ -52,6 +63,6 @@ init() ->
     end,
     erlang:load_nif(SoName, 0).
 
+
 not_loaded(Line) ->
     exit({not_loaded, [{module, ?MODULE}, {line, Line}]}).
-

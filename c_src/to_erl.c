@@ -1,7 +1,7 @@
 
 #include <string.h>
 
-#include "emonk_util.h"
+#include "util.h"
 
 #define OK 1
 #define ERROR 0
@@ -11,7 +11,7 @@ int to_erl_intern(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term);
 int
 to_erl_atom(ErlNifEnv* env, const char* atom, ERL_NIF_TERM* term)
 {
-    *term = emonk_atom(env, atom);
+    *term = mk_atom(env, atom);
     return OK;
 }
 
@@ -223,11 +223,11 @@ to_erl_intern(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
 ERL_NIF_TERM
 to_erl(ErlNifEnv* env, JSContext* cx, jsval val)
 {
-    ERL_NIF_TERM ret = emonk_atom(env, "undefined");
+    ERL_NIF_TERM ret = mk_atom(env, "undefined");
     
     if(!to_erl_intern(env, cx, val, &ret))
     {
-        return emonk_atom(env, "undefined");
+        return mk_atom(env, "undefined");
     }
 
     return ret;

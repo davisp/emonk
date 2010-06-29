@@ -4,7 +4,7 @@ main(_) ->
     code:add_pathz("test"),
     code:add_pathz("ebin"),
 
-    etap:plan(8),
+    etap:plan(10),
     case (catch test()) of
         ok ->
             etap:end_tests();
@@ -15,7 +15,7 @@ main(_) ->
     ok.
 
 test() ->
-    {ok, Ctx} = emonk:new_context(),
+    {ok, Ctx} = emonk:create_ctx(),
 
     test_eval_ok(Ctx),
     test_call_ok(Ctx),
@@ -35,7 +35,12 @@ test_eval_ok(Ctx) ->
     ).
 
 test_call_ok(Ctx) ->
-    {ok, undefined} = emonk:eval(Ctx, <<"var g = function(x) {return x*2};">>),
+    etap:fun_is(
+        fun({ok, undefined}) -> true; (_) -> false end,
+        emonk:eval(Ctx, <<"var g = function(x) {return x*2};">>),
+        "Created function ok."
+    ),
+
     etap:is(
         emonk:call(Ctx, <<"g">>, [6]),
         {ok, 12},
@@ -56,7 +61,12 @@ test_eval_undefined(Ctx) ->
     ).
 
 test_call_undefined(Ctx) ->
-    {ok, undefined} = emonk:eval(Ctx, <<"var h = function(x) {return g};">>),
+    etap:fun_is(
+        fun({ok, undefined}) -> true; (_) -> false end,
+        emonk:eval(Ctx, <<"var h = function(x) {return g};">>),
+        "Created function ok."
+    ),
+
     etap:is(
         emonk:call(Ctx, <<"h">>, []),
         {ok, undefined},

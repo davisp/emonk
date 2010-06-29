@@ -1,7 +1,7 @@
 
 #include <string.h>
 
-#include "emonk_util.h"
+#include "util.h"
 
 jsval
 to_js_special(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)

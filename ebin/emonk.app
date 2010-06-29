@@ -1,8 +1,8 @@
 {application, emonk, [
-    {description, "Emonk - Spidermonkey JavaScript bindings."},
-    {vsn, "0.0.1"},
+    {description, "Emonk - JavaScript bindings for Erlang"},
+    {vsn, "0.0.0"},
     {modules, [emonk]},
     {registered, []},
     {applications, [kernel, stdlib]},
-    {mod, {emonk, []}}
+    {env, []}
 ]}.

@@ -15,7 +15,7 @@ main(_) ->
     ok.
 
 test() ->
-    {ok, Ctx} = emonk:new_context(),
+    {ok, Ctx} = emonk:create_ctx(),
 
     Tests = [
         {<<"null">>, null},
