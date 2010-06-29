@@ -20,13 +20,13 @@ main([]) ->
     code:add_pathz("test"),
     code:add_pathz("ebin"),
 
-    etap:plan(5 + 384),
-    etap:is(emonk:num_workers(), 1, "Initialized with 1 worker."),
+    etap:plan(5 + 387),
+    etap:is(emonk:num_workers(), 2, "Initialized with 1 worker."),
     etap:is(emonk:add_worker(), ok, "Adding a worker succeeded."),
-    etap:is(emonk:num_workers(), 2, "New worker changes worker count."),
+    etap:is(emonk:num_workers(), 3, "New worker changes worker count."),
     etap:is(emonk:rem_worker(), ok, "Removing a worker succeeded"),
-    etap:is(emonk:num_workers(), 1, "Dead worker changes worker count."),
-    test_adding(64, 1),
+    etap:is(emonk:num_workers(), 2, "Dead worker changes worker count."),
+    test_adding(64, 2),
     
     etap:end_tests().
 

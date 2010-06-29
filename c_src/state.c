@@ -40,6 +40,11 @@ state_create(ErlNifEnv* env)
                                                             state->deaths);
     if(state->workers == NULL) goto error;
 
+    state->workers->next = worker_create(state->thread_opts, state->requests,
+                                                            state->deaths);
+    if(state->workers->next == NULL) goto error;
+    state->workers->next->prev = state->workers;
+
     res = enif_open_resource_type(env, NULL, name, vm_destroy, opts, NULL);
     if(res == NULL) goto error;
     state->ctx_res = res;
