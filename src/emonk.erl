@@ -5,12 +5,13 @@
 
 -export([add_worker/0, rem_worker/0, num_workers/0]).
 -export([create_ctx/0, create_ctx/1]).
--export([eval/2, call/3]).
+-export([eval/2, eval/3, call/3, call/4]).
 
 
 -define(APPNAME, emonk).
 -define(LIBNAME, emonk).
 -define(CTX_STACK, 8192).
+-define(TIMEOUT, 5000).
 
 add_worker() ->
     not_loaded(?LINE).
@@ -28,20 +29,32 @@ create_ctx(_) ->
     not_loaded(?LINE).
 
 eval(Ctx, Script) ->
+    eval(Ctx, Script, ?TIMEOUT).
+
+eval(Ctx, Script, Timeout) ->
     Ref = make_ref(),
     eval(Ctx, Ref, self(), Script),
     receive
-        {Ref, Resp} -> Resp
+        {Ref, Resp} ->
+            Resp
+        after Timeout ->
+            throw({error, timeout})
     end.
 
 eval(_Ctx, _Ref, _Dest, _Script) ->
     not_loaded(?LINE).
 
 call(Ctx, Name, Args) ->
+    call(Ctx, Name, Args, ?TIMEOUT).
+
+call(Ctx, Name, Args, Timeout) ->
     Ref = make_ref(),
     call(Ctx, Ref, self(), Name, Args),
     receive
-        {Ref, Resp} -> Resp
+        {Ref, Resp} ->
+            Resp
+        after Timeout ->
+            throw({error, timeout})
     end.
 
 call(_Ctx, _Ref, _Dest, _Name, _Args) ->
