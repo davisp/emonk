@@ -1,16 +1,41 @@
+#include <assert.h>
 #include <stdio.h>
 #include "queue.h"
 
-queue_t*
-queue_create(void (*dtor) (void*))
-{
-    queue_t* ret;
-    
-    if(dtor == NULL) return NULL;
 
-    ret = (queue_t*) enif_alloc(sizeof(queue_t));
+#define DBG(FMT, args...) fprintf(stderr, FMT, ## args)
+//#define DBG(fmt, args...) do {} while(0)
+
+struct qitem_t
+{
+    struct qitem_t*     next;
+    void*               data;
+};
+
+typedef struct qitem_t* qitem_ptr;
+
+struct queue_t
+{
+    const char*         name;
+
+    ErlNifMutex*        lock;
+    ErlNifCond*         cond;
+
+    qitem_ptr           head;
+    qitem_ptr           tail;
+
+    int                 length;
+};
+
+queue_ptr
+queue_create(const char* name)
+{
+    queue_ptr ret;
+
+    ret = (queue_ptr) enif_alloc(sizeof(struct queue_t));
     if(ret == NULL) return NULL;
-    ret->dtor = dtor;    
+    ret->name = name;
+    ret->length = 0;
 
     ret->lock = enif_mutex_create("queue_lock");
     if(ret->lock == NULL)
@@ -34,14 +59,13 @@ queue_create(void (*dtor) (void*))
 }
 
 void
-queue_destroy(queue_t* queue)
+queue_destroy(queue_ptr queue)
 {
-    qitem_t* entry;
+    qitem_ptr entry;
     while(queue->head != NULL)
     {
         entry = queue->head;
         queue->head = entry->next;
-        queue->dtor(entry->data);
         enif_free(entry);
     }
 
@@ -51,23 +75,36 @@ queue_destroy(queue_t* queue)
     enif_free(queue);
 }
 
-int
-queue_push(queue_t* queue, void* item)
+int queue_has_item(queue_ptr queue)
 {
-    qitem_t* entry = (qitem_t*) enif_alloc(sizeof(qitem_t));
+    int ret;
+    
+    enif_mutex_lock(queue->lock);
+    ret = (queue->head != NULL);
+    enif_mutex_unlock(queue->lock);
+    
+    return ret;
+}
+
+int
+queue_push(queue_ptr queue, void* item)
+{
+    qitem_ptr entry = (qitem_ptr) enif_alloc(sizeof(struct qitem_t));
     if(entry == NULL) return 0;
 
     entry->data = item;
-    entry->prev = NULL;
     entry->next = NULL;
 
     enif_mutex_lock(queue->lock);
+
+    DBG("> %d %s\r\n", queue->length, queue->name);
+    assert(queue->length >= 0 && "Invalid queue size at push");
     
     if(queue->tail != NULL)
     {
-        entry->prev = queue->tail;
         queue->tail->next = entry;
     }
+
     queue->tail = entry;
 
     if(queue->head == NULL)
@@ -75,6 +112,8 @@ queue_push(queue_t* queue, void* item)
         queue->head = queue->tail;
     }
 
+    queue->length += 1;
+
     enif_cond_signal(queue->cond);
     enif_mutex_unlock(queue->lock);
 
@@ -82,28 +121,32 @@ queue_push(queue_t* queue, void* item)
 }
 
 int
-queue_sneak(queue_t* queue, void* item)
+queue_sneak(queue_ptr queue, void* item)
 {
-    qitem_t* entry = (qitem_t*) enif_alloc(sizeof(qitem_t));
+    qitem_ptr entry = (qitem_ptr) enif_alloc(sizeof(struct qitem_t));
     if(entry == NULL) return 0;
 
     entry->data = item;
-    entry->prev = NULL;
     entry->next = NULL;
 
     enif_mutex_lock(queue->lock);
 
+    DBG("> %d %s\r\n", queue->length, queue->name);
+    assert(queue->length >= 0 && "Invalid queue size at sneak");
+
     if(queue->head != NULL)
     {
         entry->next = queue->head;
-        queue->head->prev = entry;
     }
+
     queue->head = entry;
 
     if(queue->tail == NULL)
     {
         queue->tail = queue->head;
     }
+
+    queue->length += 1;
 
     enif_cond_signal(queue->cond);
     enif_mutex_unlock(queue->lock);
@@ -112,30 +155,36 @@ queue_sneak(queue_t* queue, void* item)
 }
 
 void*
-queue_pop(queue_t* queue)
+queue_pop(queue_ptr queue)
 {
-    qitem_t* entry;
+    qitem_ptr entry;
     void* item;
 
     enif_mutex_lock(queue->lock);
     
+    // Wait for an item to become available.
     while(queue->head == NULL)
     {
         enif_cond_wait(queue->cond, queue->lock);
     }
+    
+    DBG("< %d %s\r\n", queue->length, queue->name);
+    assert(queue->length >= 0 && "Invalid queue size at pop.");
+
+    // Woke up because queue->head != NULL
+    // Remove the entry and return the payload.
 
     entry = queue->head;
-    if(entry->next != NULL)
+    queue->head = entry->next;
+    entry->next = NULL;
+
+    if(queue->head == NULL)
     {
-        queue->head = entry->next;
-        queue->head->prev = NULL;
-        entry->next = NULL;
-    }
-    else
-    {
-        queue->head = NULL;
+        assert(queue->tail == entry && "Invalid queue state: Bad tail.");
         queue->tail = NULL;
     }
+
+    queue->length -= 1;
 
     enif_mutex_unlock(queue->lock);
 
@@ -146,40 +195,40 @@ queue_pop(queue_t* queue)
 }
 
 void*
-queue_pop_nowait(queue_t* queue)
+queue_pop_nowait(queue_ptr queue)
 {
-    qitem_t* entry;
+    qitem_ptr entry;
     void* item;
 
     enif_mutex_lock(queue->lock);
 
-    entry = queue->head;
-    if(entry == NULL)
+    DBG("< %d NW %s\r\n", queue->length, queue->name);
+    assert(queue->length >= 0 && "Invalid queue size at pop_nowait.");
+
+    // Nothing available. Bail out.
+    if(queue->head == NULL)
     {
         enif_mutex_unlock(queue->lock);
         return NULL;
     }
-    else if(entry->next != NULL)
+
+    entry = queue->head;
+    queue->head = entry->next;
+    entry->next = NULL;
+    
+    if(queue->head == NULL)
     {
-        queue->head = entry->next;
-        queue->head->prev = NULL;
-        entry->next = NULL;
-    }
-    else
-    {
-        queue->head = NULL;
+        assert(queue->tail == entry && "Invalid queue state: Bad tail.");
         queue->tail = NULL;
     }
 
+    queue->length -= 1;
+
     enif_mutex_unlock(queue->lock);
+
     item = entry->data;
     enif_free(entry);
 
     return item;
 }
 
-void
-queue_done(queue_t* queue, void* item)
-{
-    queue->dtor(item);
-}

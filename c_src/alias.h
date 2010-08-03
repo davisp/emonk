@@ -3,5 +3,6 @@
 
 typedef ERL_NIF_TERM ENTERM;
 typedef const ERL_NIF_TERM CENTERM;
+typedef ErlNifBinary ENBINARY;
 
 #endif // Included alias.h

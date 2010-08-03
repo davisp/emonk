@@ -4,7 +4,6 @@
 #include "erl_nif.h"
 
 #include "queue.h"
-#include "req.h"
 
 typedef enum
 {
@@ -13,20 +12,10 @@ typedef enum
     worker_terminated
 } worker_status_e;
 
-typedef struct _worker_t
-{
-    ErlNifTid           tid;
-    ErlNifMutex*        lock;
+typedef struct worker_t* worker_ptr;
 
-    worker_status_e     status;
-    queue_t*            requests;
-    queue_t*            deaths;
-
-    struct _worker_t*   prev;
-    struct _worker_t*   next;
-} worker_t;
-
-worker_t* worker_create(ErlNifThreadOpts* opts, queue_t* reqs, queue_t* deaths);
+worker_ptr worker_create(ErlNifThreadOpts* topts, queue_ptr req_q,
+                            queue_ptr dth_q);
 void worker_destroy(void* obj);
 
 #endif // Included worker.h

@@ -3,7 +3,7 @@
 -on_load(init/0).
 
 
--export([add_worker/0, rem_worker/0, num_workers/0]).
+-export([num_workers/0, add_worker/0, rem_worker/0]).
 -export([create_ctx/0, create_ctx/1]).
 -export([eval/2, eval/3, call/3, call/4]).
 
@@ -13,13 +13,13 @@
 -define(CTX_STACK, 8192).
 -define(TIMEOUT, 5000).
 
+num_workers() ->
+    not_loaded(?LINE).
+
 add_worker() ->
     not_loaded(?LINE).
 
 rem_worker() ->
-    not_loaded(?LINE).
-
-num_workers() ->
     not_loaded(?LINE).
 
 create_ctx() ->
@@ -38,7 +38,7 @@ eval(Ctx, Script, Timeout) ->
         {Ref, Resp} ->
             Resp
         after Timeout ->
-            throw({error, timeout})
+            throw({error, timeout, Ref})
     end.
 
 eval(_Ctx, _Ref, _Dest, _Script) ->
@@ -54,7 +54,7 @@ call(Ctx, Name, Args, Timeout) ->
         {Ref, Resp} ->
             Resp
         after Timeout ->
-            throw({error, timeout})
+            throw({error, timeout, Ref})
     end.
 
 call(_Ctx, _Ref, _Dest, _Name, _Args) ->

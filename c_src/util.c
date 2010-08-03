@@ -1,22 +1,17 @@
 
 #include <string.h>
 
-#include "job.h"
+#include "vm.h"
 #include "util.h"
 
 void
 report_error(JSContext* cx, const char* mesg, JSErrorReport* report)
 {
-    job_t* job;
-
+    void* job;
     ErlNifBinary bmesg;
     ErlNifBinary bsrc;
-    
-    ENTERM tmesg;
-    ENTERM tsrc;
-    ENTERM tline;
 
-    job = (job_t*) JS_GetContextPrivate(cx);
+    job = JS_GetContextPrivate(cx);
     if(job == NULL) return;
 
     if(!(report->flags & JSREPORT_EXCEPTION)) return;
@@ -30,11 +25,7 @@ report_error(JSContext* cx, const char* mesg, JSErrorReport* report)
     memcpy(bmesg.data, mesg, strlen(mesg));
     memcpy(bsrc.data, report->linebuf, strlen(report->linebuf));
 
-    tmesg = enif_make_binary(job->env, &bmesg);
-    tsrc = enif_make_binary(job->env, &bsrc);
-    tline = enif_make_int(job->env, report->lineno);
-    
-    job->error = enif_make_tuple3(job->env, tmesg, tsrc, tline);
+    vm_set_error(job, bmesg, bsrc, report->lineno);
 }
 
 ENTERM

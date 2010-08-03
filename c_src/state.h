@@ -4,33 +4,23 @@
 #include <js/jsapi.h>
 #include "erl_nif.h"
 
+#include "alias.h"
 #include "queue.h"
-#include "worker.h"
 
-typedef struct
-{
-    ErlNifMutex*            lock;
-    
-    ErlNifResourceType*     ctx_res;
-    
-    queue_t*                requests;
-    queue_t*                deaths;
+typedef struct state_t* state_ptr;
 
-    worker_t*               workers;
-    ErlNifThreadOpts*       thread_opts;
-    
-    JSRuntime*              runtime;
+state_ptr state_create(ErlNifEnv* env);
+void state_destroy(state_ptr state);
 
-    ENTERM                  atom_ok;
-    ENTERM                  atom_error;
-} state_t;
+queue_ptr state_req_queue(state_ptr state);
+ErlNifResourceType* state_res_type(state_ptr state);
+JSRuntime* state_js_runtime(state_ptr state);
 
+ENTERM state_ok(state_ptr state);
+ENTERM state_error(state_ptr state);
 
-state_t* state_create(ErlNifEnv* env);
-void state_destroy(state_t* state);
-
-int state_add_worker(state_t* state);
-int state_rem_worker(state_t* state);
-int state_num_workers(state_t* state);
+unsigned int state_num_workers(state_ptr state);
+int state_add_worker(state_ptr state);
+int state_rem_worker(state_ptr state);
 
 #endif // Included state.h

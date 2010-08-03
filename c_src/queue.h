@@ -3,33 +3,16 @@
 
 #include "erl_nif.h"
 
-typedef struct _qitem_t
-{
-    struct _qitem_t*    prev;
-    struct _qitem_t*    next;
-    void*               data;
-} qitem_t;
+typedef struct queue_t* queue_ptr;
 
+queue_ptr queue_create(const char* name);
+void queue_destroy(queue_ptr queue);
 
-typedef struct
-{
-    ErlNifMutex*        lock;
-    ErlNifCond*         cond;
+int queue_has_item(queue_ptr queue);
 
-    qitem_t*            head;
-    qitem_t*            tail;
-    
-    void                (*dtor) (void*);
-} queue_t;
-
-
-queue_t* queue_create(void (*dtor) (void*));
-void queue_destroy(queue_t* queue);
-
-int queue_push(queue_t* queue, void* item);
-int queue_sneak(queue_t* queue, void* item);
-void* queue_pop(queue_t* queue);
-void* queue_pop_nowait(queue_t* queue);
-void queue_done(queue_t* queue, void* item);
+int queue_push(queue_ptr queue, void* item);
+int queue_sneak(queue_ptr queue, void* item);
+void* queue_pop(queue_ptr queue);
+void* queue_pop_nowait(queue_ptr queue);
 
 #endif // Included queue.h
