@@ -3,8 +3,8 @@
 #include "queue.h"
 
 
-#define DBG(FMT, args...) fprintf(stderr, FMT, ## args)
-//#define DBG(fmt, args...) do {} while(0)
+//#define DBG(FMT, args...) fprintf(stderr, FMT, ## args)
+#define DBG(fmt, args...) do {} while(0)
 
 struct qitem_t
 {

@@ -10,7 +10,11 @@
 static int
 load(ErlNifEnv* env, void** priv, ENTERM load_info)
 {
-    state_ptr state = state_create(env);
+    state_ptr state;
+    
+    JS_SetCStringsAreUTF8();
+
+    state = state_create(env);
     if(state == NULL) return -1;
 
     *priv = (void*) state;
