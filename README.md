@@ -15,17 +15,11 @@ speed.
 Requisites
 ----------
 
-Emonk will require a bit more in terms of infrastructure because the build
-system doesn't carry a copy of its own Spidermonkey code. I did this because I
-felt quite bad about untaring and building a package as part of the build
-system. Most of the emonk's build system is stolen directly from Noah Slater's
-work on CouchDB so if something is broken, blame me and fill out a ticket.
+1. A fairly recent version of Spidermonkey. I use the version from HomeBrew
+   which uses [this url][spidermonkey].
+2. R14A. Emonk uses the new NIF API extensively.
 
-Other than that, the basic requirements:
-
-1. Fairly recent version of Spidermonkey. See the SPIDERMONKEY file for more
-   info.
-2. R14A. Uses the new NIF API extensively.
+[spidermonkey]: http://hg.mozilla.org/tracemonkey/archive/57a6ad20eae9.tar.gz
 
 Building
 --------
