@@ -11,7 +11,7 @@
 -define(APPNAME, emonk).
 -define(LIBNAME, emonk).
 -define(CTX_STACK, 8192).
--define(TIMEOUT, 5000).
+-define(TIMEOUT, infinity).
 
 num_workers() ->
     not_loaded(?LINE).
@@ -22,11 +22,13 @@ add_worker() ->
 rem_worker() ->
     not_loaded(?LINE).
 
+
 create_ctx() ->
     create_ctx(?CTX_STACK).
 
 create_ctx(_) ->
     not_loaded(?LINE).
+
 
 eval(Ctx, Script) ->
     eval(Ctx, Script, ?TIMEOUT).
@@ -43,6 +45,7 @@ eval(Ctx, Script, Timeout) ->
 
 eval(_Ctx, _Ref, _Dest, _Script) ->
     not_loaded(?LINE).
+
 
 call(Ctx, Name, Args) ->
     call(Ctx, Name, Args, ?TIMEOUT).

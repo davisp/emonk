@@ -9,28 +9,53 @@ start(N) ->
     code:add_pathz("test"),
     code:add_pathz("ebin"),
     emonk:add_worker(),
-    run(N).
+    MonPid = spawn(fun() -> monitor([]) end),
+    run(MonPid, N).
 
-run(N) ->
+monitor(Pids) ->
+    io:format("Monitoring ~p pids: ~p~n", [length(Pids), now()]),
+    Pids2 = receive
+        Pid ->
+            [{Pid, now()} | proplists:delete(Pid, Pids)]
+        after 1000 ->
+            Pids
+    end,
+    check_pids(Pids2),
+    monitor(Pids2).
+
+check_pids([]) ->
+    ok;
+check_pids([{Pid, Last} | Rest]) ->
+    case timer:now_diff(now(), Last) of
+        Diff when Diff >= 5000000 ->
+            io:format("Lost track of pid: ~p ~p~n", [Pid, Diff]);
+        _ ->
+            ok
+    end,
+    check_pids(Rest).
+
+run(MonPid, N) ->
     {ok, Ctx} = emonk:create_ctx(),
     {ok, undefined} = emonk:eval(Ctx, js()),
-    run(Ctx, N).
+    run(MonPid, Ctx, N).
 
-run(_, 0) ->
+run(_, _, 0) ->
     timer:sleep(1000),
-    %io:format(standard_error, "pong~n", []),
     run(nil, 0);
-run(Ctx, N) ->
-    %io:format("Running: ~p~n", [N]),
-    spawn(fun() -> do_js(Ctx) end),
-    run(N-1).
+run(MonPid, Ctx, N) ->
+    Pid = spawn(fun() -> do_js(MonPid, Ctx, 250) end),
+    MonPid ! Pid,
+    run(MonPid, N-1).
 
-do_js(Ctx) ->
+do_js(MonPid, Ctx, 0) ->
+    MonPid ! self(),
+    do_js(MonPid, Ctx, 250);
+do_js(MonPid, Ctx, Num) ->
     Test = random_test(),
     {ok, [Resp]} = emonk:call(Ctx, <<"f">>, [Test]),
     Sorted = sort(Resp),
     true = Test == Sorted,
-    do_js(Ctx).
+    do_js(MonPid, Ctx, Num-1).
 
 js() -> 
     <<"var f = function(x) {return [x];};">>.
