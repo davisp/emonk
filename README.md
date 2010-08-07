@@ -38,7 +38,7 @@ I've been using [etap][etap] to test as I code. Its awesome. You should use it.
 That said, running is pretty cake assuming emonk is on your Erlang code path:
 
     $ ERL_LIBS=~/awesome_projects/emonk/src erl -s emonk
-    1> {ok, Context} = emonk:new_context().
+    1> {ok, Context} = emonk:create_ctx().
     {ok, <<>>} % Note: The <<>> here is *not* an empty binary. Its a resource.
     2> emonk:eval(Context, <<"var f = 2; f*3;">>).
     {ok, 6}
