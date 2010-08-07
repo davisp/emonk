@@ -27,7 +27,7 @@ to_js_special(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
     }
     else
     {
-        str = JS_NewString(cx, atom, strlen(atom));
+        str = JS_NewStringCopyZ(cx, atom);
         if(str == NULL) return JSVAL_VOID;
         return STRING_TO_JSVAL(str);
     }
