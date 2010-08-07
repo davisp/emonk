@@ -166,6 +166,8 @@ vm_destroy(ErlNifEnv* env, void* obj)
 {
     vm_ptr vm = (vm_ptr) obj;
     
+    assert(vm->status == vm_idle && "VM is being destroyed while running.");
+    
     if(vm->cx != NULL)
     {
         JS_SetContextThread(vm->cx);
@@ -174,7 +176,7 @@ vm_destroy(ErlNifEnv* env, void* obj)
     
     if(vm->jobs != NULL)
     {
-        queue_destroy(vm->jobs);
+        queue_destroy(vm->jobs, job_destroy);
     }
     
     if(vm->lock != NULL)
@@ -188,25 +190,16 @@ vm_set_status(vm_ptr vm, vm_status_e status)
 {
     vm_status_e ret;
     
-    enif_mutex_lock(vm->lock);
-
     ret = vm->status;
-
+    
     if(vm->status == vm_running && status == vm_idle)
     {
-        // An idle VM can be released.
-        enif_release_resource(vm);
         vm->status = status;
     }
     else if(vm->status == vm_idle && status == vm_running)
     {
-        // Keep a reference to the resource so
-        // it isn't released out from under us.
-        enif_keep_resource(vm);
         vm->status = status;
     }
-
-    enif_mutex_unlock(vm->lock);
 
     return ret;
 }
@@ -241,13 +234,20 @@ vm_add_eval(ErlNifEnv* env, int argc, CENTERM argv[])
     }
     job = NULL;
 
+    enif_mutex_lock(vm->lock);
+
+    // inc-ref so it stays alive for this job.
+    enif_keep_resource(vm);
+
     if(vm_set_status(vm, vm_running) == vm_idle)
     {
         if(!queue_push(state_req_queue(state), vm))
         {
+            enif_release_resource(vm);
             goto error;
         }
     }
+    enif_mutex_unlock(vm->lock);
 
     return state_ok(state);
 
@@ -283,14 +283,21 @@ vm_add_call(ErlNifEnv* env, int argc, CENTERM argv[])
         goto error;
     }
     job = NULL;
-
+    
+    enif_mutex_lock(vm->lock);
+    
+    // inc-ref so it stays alive for this job.
+    enif_keep_resource(vm);
+    
     if(vm_set_status(vm, vm_running) == vm_idle)
     {
         if(!queue_push(state_req_queue(state), vm))
         {
+            enif_release_resource(vm);
             goto error;
         }
     }
+    enif_mutex_unlock(vm->lock);
 
     return state_ok(state);
 
@@ -305,12 +312,14 @@ vm_run_job(vm_ptr vm, queue_ptr req_q)
     job_ptr job;
     ENTERM resp;
 
+    enif_mutex_lock(vm->lock);
     job = queue_pop_nowait(vm->jobs);
     if(job == NULL)
     {
         vm_set_status(vm, vm_idle);
         return;
     }
+    enif_mutex_unlock(vm->lock);
 
     BEGIN_REQ(vm->cx);
     JS_SetContextPrivate(vm->cx, job);
@@ -334,14 +343,7 @@ vm_run_job(vm_ptr vm, queue_ptr req_q)
     JS_MaybeGC(vm->cx);
     END_REQ(vm->cx);
 
-    // Should we just log this? Or ignore it?
-    if(!enif_send(NULL, &(job->pid), job->env, resp))
-    {
-        assert(0 && "Failed to send response for job.");
-    }
-
-    job_destroy(job);
-
+    enif_mutex_lock(vm->lock);
     if(!queue_has_item(vm->jobs))
     {
         vm_set_status(vm, vm_idle);
@@ -350,6 +352,23 @@ vm_run_job(vm_ptr vm, queue_ptr req_q)
     {
         queue_push(req_q, vm);
     }
+
+    // dec-ref to match our keep calls per job.
+    enif_release_resource(vm);
+
+    enif_mutex_unlock(vm->lock);
+
+    // Don't send until after we release the resource as there's
+    // a race condition with Erlang decref'ing the context before
+    // us which causes errors when destroying the locked mutex.
+    //
+    // Should we just log this? Or ignore it?
+    if(!enif_send(NULL, &(job->pid), job->env, resp))
+    {
+        assert(0 && "Failed to send response for job.");
+    }
+
+    job_destroy(job);
 
     return;
 }

@@ -59,14 +59,14 @@ queue_create(const char* name)
 }
 
 void
-queue_destroy(queue_ptr queue)
+queue_destroy(queue_ptr queue, void (*dtor) (void*))
 {
     qitem_ptr entry;
     while(queue->head != NULL)
     {
         entry = queue->head;
         queue->head = entry->next;
-        enif_free(entry);
+        dtor(entry);
     }
 
     enif_cond_destroy(queue->cond);
@@ -75,7 +75,8 @@ queue_destroy(queue_ptr queue)
     enif_free(queue);
 }
 
-int queue_has_item(queue_ptr queue)
+int
+queue_has_item(queue_ptr queue)
 {
     int ret;
     

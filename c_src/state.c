@@ -83,6 +83,12 @@ error:
 }
 
 void
+vm_dtor(void* obj)
+{
+    // VM's are ref counted. They'll die later.
+}
+
+void
 state_destroy(state_ptr state)
 {
     int w;
@@ -105,12 +111,12 @@ state_destroy(state_ptr state)
     
     if(state->dth_q != NULL)
     {
-        queue_destroy(state->dth_q);
+        queue_destroy(state->dth_q, worker_destroy);
     }
 
     if(state->req_q != NULL)
     {
-        queue_destroy(state->req_q);
+        queue_destroy(state->req_q, vm_dtor);
     }
 
     // XXX: Big assumption that we can't call this destructor with
