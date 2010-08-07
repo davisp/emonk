@@ -59,6 +59,15 @@ The best place to file [bugs][bugs] is at the [issue][bugs] tracker on
 [github]: http://github.com/davisp
 [mattly]: http://twitter.com/mattly
 
+General Design
+--------------
+
+This is a picture on the general structure of Emonk. For anyone interested
+in the internals this should hopefully provide a decent outline of how the
+pieces fit together.
+
+![design!](http://github.com/davisp/emonk/raw/master/docs/emonk.png)
+
 Yep
 ---
 
