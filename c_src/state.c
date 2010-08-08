@@ -83,25 +83,23 @@ error:
 }
 
 void
-vm_dtor(void* obj)
+blank_dtor(void* obj)
 {
-    // VM's are ref counted. They'll die later.
+    // VM's are ref counted.
+    // Workers are handled by state_rem_worker.
 }
 
 void
 state_destroy(state_ptr state)
 {
-    int w;
-
     if(state == NULL)
     {
         return;
     }
 
-    for(w = 0; w < state->num_workers; w++)
+    while(state->num_workers > 0)
     {
-        worker_destroy(state->workers[w]);
-        state->workers[w] = NULL;
+        state_rem_worker(state, TRUE);
     }
 
     if(state->topts != NULL)
@@ -111,12 +109,12 @@ state_destroy(state_ptr state)
     
     if(state->dth_q != NULL)
     {
-        queue_destroy(state->dth_q, worker_destroy);
+        queue_destroy(state->dth_q, blank_dtor);
     }
 
     if(state->req_q != NULL)
     {
-        queue_destroy(state->req_q, vm_dtor);
+        queue_destroy(state->req_q, blank_dtor);
     }
 
     // XXX: Big assumption that we can't call this destructor with
@@ -231,7 +229,7 @@ state_add_worker(state_ptr state)
 }
 
 int
-state_rem_worker(state_ptr state)
+state_rem_worker(state_ptr state, int closing)
 {
     worker_ptr worker;
     int w, found;
@@ -244,7 +242,7 @@ state_rem_worker(state_ptr state)
     // Check if we have a worker to remove. We keep at least one worker.
 
     assert(state->num_workers > 0 && "Invalid state: No workers.");
-    if(state->num_workers < 2)
+    if(state->num_workers < 2 && !closing)
     {
         enif_mutex_unlock(state->lock);
         return 0;

@@ -7,6 +7,14 @@
 #include "alias.h"
 #include "queue.h"
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 typedef struct state_t* state_ptr;
 
 state_ptr state_create(ErlNifEnv* env);
@@ -21,6 +29,6 @@ ENTERM state_error(state_ptr state);
 
 unsigned int state_num_workers(state_ptr state);
 int state_add_worker(state_ptr state);
-int state_rem_worker(state_ptr state);
+int state_rem_worker(state_ptr state, int closing);
 
 #endif // Included state.h

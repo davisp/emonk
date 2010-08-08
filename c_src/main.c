@@ -53,7 +53,7 @@ rem_worker(ErlNifEnv* env, int argc, CENTERM argv[])
 {
     state_ptr state = (state_ptr) enif_priv_data(env);
     
-    if(!state_rem_worker(state))
+    if(!state_rem_worker(state, FALSE))
     {
         return state_error(state);
     }
