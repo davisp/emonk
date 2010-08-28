@@ -1,61 +1,47 @@
 #! /usr/bin/env escript
 
 main([]) ->
-    start(8);
+    start(64, 1000);
 main([N]) ->
-    start(list_to_integer(N)).
+    start(list_to_integer(N), 1000);
+main([N, M]) ->
+    start(list_to_integer(N), list_to_integer(M)).
 
-start(N) ->
+
+start(N, M) ->
     code:add_pathz("test"),
     code:add_pathz("ebin"),
-    emonk:add_worker(),
-    MonPid = spawn(fun() -> monitor([]) end),
-    run(MonPid, N).
+    run(N, M),
+    wait(N).
 
-monitor(Pids) ->
-    io:format("Monitoring ~p pids: ~p~n", [length(Pids), now()]),
-    Pids2 = receive
-        Pid ->
-            [{Pid, now()} | proplists:delete(Pid, Pids)]
-        after 1000 ->
-            Pids
-    end,
-    check_pids(Pids2),
-    monitor(Pids2).
-
-check_pids([]) ->
+run(0, _) ->
     ok;
-check_pids([{Pid, Last} | Rest]) ->
-    case timer:now_diff(now(), Last) of
-        Diff when Diff >= 5000000 ->
-            io:format("Lost track of pid: ~p ~p~n", [Pid, Diff]);
-        _ ->
-            ok
-    end,
-    check_pids(Rest).
-
-run(MonPid, N) ->
+run(N, M) ->
     {ok, Ctx} = emonk:create_ctx(),
     {ok, undefined} = emonk:eval(Ctx, js()),
-    run(MonPid, Ctx, N).
+    Self = self(),
+    Pid = spawn(fun() -> do_js(Self, Ctx, M) end),
+    io:format("Spawned: ~p~n", [Pid]),
+    run(N-1, M).
 
-run(_, _, 0) ->
-    timer:sleep(1000),
-    run(nil, 0);
-run(MonPid, Ctx, N) ->
-    Pid = spawn(fun() -> do_js(MonPid, Ctx, 250) end),
-    MonPid ! Pid,
-    run(MonPid, N-1).
+wait(0) ->
+    ok;
+wait(N) ->
+    receive
+        {finished, Pid} -> ok
+    end,
+    io:format("Finished: ~p~n", [Pid]),
+    wait(N-1).
 
-do_js(MonPid, Ctx, 0) ->
-    MonPid ! self(),
-    do_js(MonPid, Ctx, 250);
-do_js(MonPid, Ctx, Num) ->
+do_js(Parent, _, 0) ->
+    Parent ! {finished, self()};
+do_js(Parent, Ctx, M) ->
+    io:format("Running: ~p~n", [M]),
     Test = random_test(),
     {ok, [Resp]} = emonk:call(Ctx, <<"f">>, [Test]),
     Sorted = sort(Resp),
     true = Test == Sorted,
-    do_js(MonPid, Ctx, Num-1).
+    do_js(Parent, Ctx, M-1).
 
 js() -> 
     <<"var f = function(x) {return [x];};">>.

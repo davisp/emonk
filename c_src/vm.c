@@ -1,25 +1,14 @@
 #include <assert.h>
 #include <string.h>
 
+#include "queue.h"
 #include "util.h"
 #include "vm.h"
-
-#define BEGIN_REQ(cx)           \
-    JS_SetContextThread(cx);    \
-    JS_BeginRequest(cx);
-
-#define END_REQ(cx)             \
-    JS_EndRequest(cx);          \
-    JS_ClearContextThread(cx);
-
-// A job is a representation of a function call for eval or
-// call. It is created and placed into the VM queue to be
-// processed when a worker becomes ready to run jobs for this
-// VM.
 
 typedef enum
 {
     job_unknown,
+    job_close,
     job_eval,
     job_call
 } job_type_e;
@@ -41,21 +30,14 @@ struct job_t
 
 typedef struct job_t* job_ptr;
 
-// A VM is the grouping of a JSContext pointer and a queue
-// of jobs related to function calls. As workers handle VM's
-// they'll run the job and then send the output to the PID
-// that requested the job.
-
 struct vm_t
 {
-    ErlNifMutex*    lock;
-    
-    vm_status_e     status;
-    
-    JSContext*      cx;
-    JSObject*       gl;
-
-    queue_ptr       jobs;
+    ErlNifTid           tid;
+    ErlNifThreadOpts*   opts;
+    JSRuntime*          runtime;
+    queue_ptr           jobs;
+    size_t              stack_size;
+    int                 alive;
 };
 
 static JSClass global_class = {
@@ -72,9 +54,12 @@ static JSClass global_class = {
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
-ENTERM vm_eval(vm_ptr vm, job_ptr job);
-ENTERM vm_call(vm_ptr vm, job_ptr job);
-void job_destroy(void* obj);
+void* vm_run(void* arg);
+ENTERM vm_eval(JSContext* cx, JSObject* gl, job_ptr job);
+ENTERM vm_call(JSContext* cx, JSObject* gl, job_ptr job);
+void vm_report_error(JSContext* cx, const char* mesg, JSErrorReport* report);
+ENTERM vm_mk_ok(ErlNifEnv* env, ENTERM reason);
+ENTERM vm_mk_error(ErlNifEnv* env, ENTERM reason);
 
 job_ptr
 job_create()
@@ -113,47 +98,20 @@ job_destroy(void* obj)
 //
 
 vm_ptr
-vm_init(state_ptr state, size_t stack_size)
+vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size)
 {
-    ErlNifResourceType* res_type = state_res_type(state);
-    JSRuntime* rt = state_js_runtime(state);
-    int flags;
-
     vm_ptr vm = (vm_ptr) enif_alloc_resource(res_type, sizeof(struct vm_t));
-    if(vm == NULL) return 0;
+    if(vm == NULL) return NULL;
 
-    vm->lock = NULL;
-    vm->status = vm_idle;
-    vm->cx = NULL;
-    vm->gl = NULL;
-    vm->jobs = NULL;
+    vm->runtime = runtime;
+    vm->stack_size = stack_size;
 
-    vm->lock = enif_mutex_create("vm_lock");
-    if(vm->lock == NULL) goto error;
-
-    vm->cx = JS_NewContext(rt, stack_size);
-    if(vm->cx == NULL) goto error;
-
-    vm->jobs = queue_create("context_jobs");
+    vm->jobs = queue_create();
     if(vm->jobs == NULL) goto error;
-
-    BEGIN_REQ(vm->cx);
-
-    flags = 0;
-    flags |= JSOPTION_VAROBJFIX;
-    flags |= JSOPTION_STRICT;
-    flags |= JSVERSION_LATEST;
-    flags |= JSOPTION_COMPILE_N_GO;
-    flags |= JSOPTION_XML;
-    JS_SetOptions(vm->cx, JS_GetOptions(vm->cx) | flags);
     
-    vm->gl = JS_NewObject(vm->cx, &global_class, NULL, NULL);
-    if(vm->gl == NULL) goto error;
-    if(!JS_InitStandardClasses(vm->cx, vm->gl)) goto error;
-    JS_SetErrorReporter(vm->cx, report_error);
+    vm->opts = enif_thread_opts_create("vm_thread_opts");
+    if(enif_thread_create("", &vm->tid, vm_run, vm, vm->opts) != 0) goto error;
     
-    END_REQ(vm->cx);
-
     return vm;
 
 error:
@@ -165,216 +123,149 @@ void
 vm_destroy(ErlNifEnv* env, void* obj)
 {
     vm_ptr vm = (vm_ptr) obj;
+    job_ptr job = job_create();
+    void* resp;
     
-    assert(vm->status == vm_idle && "VM is being destroyed while running.");
+    assert(job != NULL && "Failed to create job.");
+    job->type = job_close;
+    queue_push(vm->jobs, job);
+
+    enif_thread_join(vm->tid, &resp);
     
-    if(vm->cx != NULL)
-    {
-        JS_SetContextThread(vm->cx);
-        JS_DestroyContext(vm->cx);
-    }
-    
-    if(vm->jobs != NULL)
-    {
-        queue_destroy(vm->jobs, job_destroy);
-    }
-    
-    if(vm->lock != NULL)
-    {
-        enif_mutex_destroy(vm->lock);
-    }
+    queue_destroy(vm->jobs);
+    enif_thread_opts_destroy(vm->opts);
 }
 
-vm_status_e
-vm_set_status(vm_ptr vm, vm_status_e status)
+void*
+vm_run(void* arg)
 {
-    vm_status_e ret;
-    
-    ret = vm->status;
-    
-    if(vm->status == vm_running && status == vm_idle)
-    {
-        vm->status = status;
-    }
-    else if(vm->status == vm_idle && status == vm_running)
-    {
-        vm->status = status;
-    }
-
-    return ret;
-}
-
-ENTERM
-vm_add_eval(ErlNifEnv* env, int argc, CENTERM argv[])
-{
-    state_ptr state = (state_ptr) enif_priv_data(env);
-    vm_ptr vm;
-    job_ptr job;
-    ErlNifBinary script;
-
-    if(argc != 4) return enif_make_badarg(env);
-    
-    if(!enif_get_resource(env, argv[0], state_res_type(state), (void**) &vm))
-    {
-        return enif_make_badarg(env);
-    }
-
-    job = job_create();
-    if(job == NULL) return enif_make_badarg(env);
-    job->type = job_eval; 
-    job->ref = enif_make_copy(job->env, argv[1]);
-    if(!enif_get_local_pid(env, argv[2], &job->pid)) goto error; 
-    if(!enif_inspect_binary(env, argv[3], &script)) goto error;
-    if(!enif_alloc_binary(script.size, &(job->script))) goto error;
-    memcpy(job->script.data, script.data, script.size);
-
-    if(!queue_push(vm->jobs, job))
-    {
-        goto error;
-    }
-    job = NULL;
-
-    enif_mutex_lock(vm->lock);
-
-    // inc-ref so it stays alive for this job.
-    enif_keep_resource(vm);
-
-    if(vm_set_status(vm, vm_running) == vm_idle)
-    {
-        if(!queue_push(state_req_queue(state), vm))
-        {
-            enif_release_resource(vm);
-            goto error;
-        }
-    }
-    enif_mutex_unlock(vm->lock);
-
-    return state_ok(state);
-
-error:
-    if(job != NULL) job_destroy(job);
-    return state_error(state);
-}
-
-ENTERM
-vm_add_call(ErlNifEnv* env, int argc, CENTERM argv[])
-{
-    state_ptr state = (state_ptr) enif_priv_data(env);
-    vm_ptr vm;
-    job_ptr job;
-
-    if(argc != 5) return enif_make_badarg(env);
-    
-    if(!enif_get_resource(env, argv[0], state_res_type(state), (void**) &vm))
-    {
-        return enif_make_badarg(env);
-    }
-
-    job = job_create();
-    if(job == NULL) return enif_make_badarg(env);
-    job->type = job_call; 
-    job->ref = enif_make_copy(job->env, argv[1]);
-    if(!enif_get_local_pid(env, argv[2], &job->pid)) goto error;
-    job->name = enif_make_copy(job->env, argv[3]);
-    job->args = enif_make_copy(job->env, argv[4]);
-
-    if(!queue_push(vm->jobs, job))
-    {
-        goto error;
-    }
-    job = NULL;
-    
-    enif_mutex_lock(vm->lock);
-    
-    // inc-ref so it stays alive for this job.
-    enif_keep_resource(vm);
-    
-    if(vm_set_status(vm, vm_running) == vm_idle)
-    {
-        if(!queue_push(state_req_queue(state), vm))
-        {
-            enif_release_resource(vm);
-            goto error;
-        }
-    }
-    enif_mutex_unlock(vm->lock);
-
-    return state_ok(state);
-
-error:
-    if(job != NULL) job_destroy(job);
-    return state_error(state);
-}
-
-void
-vm_run_job(vm_ptr vm, queue_ptr req_q)
-{
+    vm_ptr vm = (vm_ptr) arg;
+    JSContext* cx;
+    JSObject* gl;
     job_ptr job;
     ENTERM resp;
-
-    enif_mutex_lock(vm->lock);
-    job = queue_pop_nowait(vm->jobs);
-    if(job == NULL)
+    int flags;
+    
+    cx = JS_NewContext(vm->runtime, vm->stack_size);
+    if(cx == NULL)
     {
-        vm_set_status(vm, vm_idle);
-        return;
+        fprintf(stderr, "Failed to create context.\n");
+        goto done;
     }
-    enif_mutex_unlock(vm->lock);
 
-    BEGIN_REQ(vm->cx);
-    JS_SetContextPrivate(vm->cx, job);
+    JS_BeginRequest(cx);
 
-    switch(job->type)
+    flags = 0;
+    flags |= JSOPTION_VAROBJFIX;
+    flags |= JSOPTION_STRICT;
+    flags |= JSVERSION_LATEST;
+    flags |= JSOPTION_COMPILE_N_GO;
+    flags |= JSOPTION_XML;
+    JS_SetOptions(cx, JS_GetOptions(cx) | flags);
+    
+    gl = JS_NewObject(cx, &global_class, NULL, NULL);
+    if(gl == NULL)
     {
-        case job_eval:
-            resp = vm_eval(vm, job);
+        fprintf(stderr, "Failed to create global object.\n");
+        goto done;
+    }
+    
+    if(!JS_InitStandardClasses(cx, gl))
+    {
+        fprintf(stderr, "Failed to initialize classes.\n");
+        goto done;
+    }
+    JS_SetErrorReporter(cx, vm_report_error);
+
+    JS_EndRequest(cx);
+
+    while(1)
+    {
+        job = queue_pop(vm->jobs);
+        if(job->type == job_close)
+        {
+            job_destroy(job);
             break;
+        }
 
-        case job_call:
-            resp = vm_call(vm, job);
-            break;
+        JS_BeginRequest(cx);
+        JS_SetContextPrivate(cx, job);
+        
+        if(job->type == job_eval)
+        {
+            resp = vm_eval(cx, gl, job);
+        }
+        else if(job->type == job_call)
+        {
+            resp = vm_call(cx, gl, job);
+        }
+        else
+        {
+            assert(0 && "Invalid job type.");
+        }
 
-        default:
-            assert(0 && "Invalid job: Bad type.");
-            return; // silence warning
+        JS_SetContextPrivate(cx, NULL);
+        JS_EndRequest(cx);
+        JS_MaybeGC(cx);
+
+        // XXX: Should we just log this? Or ignore it?
+        if(!enif_send(NULL, &(job->pid), job->env, resp))
+        {
+            assert(0 && "Failed to send response for job.");
+        }
+
+        job_destroy(job);
     }
 
-    JS_SetContextPrivate(vm->cx, job);
-    JS_MaybeGC(vm->cx);
-    END_REQ(vm->cx);
+done:
+    JS_BeginRequest(cx);
+    if(cx != NULL) JS_DestroyContext(cx);
+    return NULL;
+}
 
-    enif_mutex_lock(vm->lock);
-    if(!queue_has_item(vm->jobs))
-    {
-        vm_set_status(vm, vm_idle);
-    }
-    else
-    {
-        queue_push(req_q, vm);
-    }
+int
+vm_add_eval(vm_ptr vm, ENTERM ref, ENPID pid, ENBINARY bin)
+{
+    job_ptr job = job_create();
 
-    // dec-ref to match our keep calls per job.
-    enif_release_resource(vm);
+    job->type = job_eval;
+    job->ref = enif_make_copy(job->env, ref);
+    job->pid = pid;
+    
+    if(!enif_alloc_binary(bin.size, &(job->script))) goto error;
+    memcpy(job->script.data, bin.data, bin.size);
 
-    enif_mutex_unlock(vm->lock);
+    if(!queue_push(vm->jobs, job)) goto error;
 
-    // Don't send until after we release the resource as there's
-    // a race condition with Erlang decref'ing the context before
-    // us which causes errors when destroying the locked mutex.
-    //
-    // Should we just log this? Or ignore it?
-    if(!enif_send(NULL, &(job->pid), job->env, resp))
-    {
-        assert(0 && "Failed to send response for job.");
-    }
+    return 1;
 
-    job_destroy(job);
+error:
+    if(job != NULL) job_destroy(job);
+    return 0;
+}
 
-    return;
+int
+vm_add_call(vm_ptr vm, ENTERM ref, ENPID pid, ENTERM name, ENTERM args)
+{
+    job_ptr job = job_create();
+    if(job == NULL) goto error;
+
+    job->type = job_call;
+    job->ref = enif_make_copy(job->env, ref);
+    job->pid = pid;
+    job->name = enif_make_copy(job->env, name);
+    job->args = enif_make_copy(job->env, args);
+
+    if(!queue_push(vm->jobs, job)) goto error;
+
+    return 1;
+error:
+    if(job != NULL) job_destroy(job);
+    return 0;
 }
 
 ENTERM
-vm_eval(vm_ptr vm, job_ptr job)
+vm_eval(JSContext* cx, JSObject* gl, job_ptr job)
 {
     ENTERM resp;
     const char* script;
@@ -391,27 +282,27 @@ vm_eval(vm_ptr vm, job_ptr job)
         if(script[i] == '\n') cnt += 1;
     }
 
-    if(!JS_EvaluateScript(vm->cx, vm->gl, script, length, "", cnt, &rval))
+    if(!JS_EvaluateScript(cx, gl, script, length, "", cnt, &rval))
     {
         if(job->error != 0)
         {
-            resp = mk_error(job->env, job->error);
+            resp = vm_mk_error(job->env, job->error);
         }
         else
         {
-            resp = mk_error(job->env, mk_atom(job->env, "unknown_error"));
+            resp = vm_mk_error(job->env, util_mk_atom(job->env, "unknown"));
         }
     }
     else
     {
-        resp = mk_ok(job->env, to_erl(job->env, vm->cx, rval));
+        resp = vm_mk_ok(job->env, to_erl(job->env, cx, rval));
     }
 
     return enif_make_tuple2(job->env, job->ref, resp);
 }
 
 ENTERM
-vm_call(vm_ptr vm, job_ptr job)
+vm_call(JSContext* cx, JSObject* gl, job_ptr job)
 {
     ENTERM resp;
     ENTERM head;
@@ -424,28 +315,28 @@ vm_call(vm_ptr vm, job_ptr job)
     
     // Get the function object.
     
-    func = to_js(job->env, vm->cx, job->name);
+    func = to_js(job->env, cx, job->name);
     if(func == JSVAL_VOID)
     {
-        resp = mk_error(job->env, mk_atom(job->env, "invalid_name"));
+        resp = vm_mk_error(job->env, util_mk_atom(job->env, "invalid_name"));
         goto send;
     }
 
-    if(!JS_ValueToId(vm->cx, func, &idp))
+    if(!JS_ValueToId(cx, func, &idp))
     {
-        resp = mk_error(job->env, mk_atom(job->env, "internal_error"));
+        resp = vm_mk_error(job->env, util_mk_atom(job->env, "internal_error"));
         goto send;
     }
     
-    if(!JS_GetPropertyById(vm->cx, vm->gl, idp, &func))
+    if(!JS_GetPropertyById(cx, gl, idp, &func))
     {
-        resp = mk_error(job->env, mk_atom(job->env, "bad_property"));
+        resp = vm_mk_error(job->env, util_mk_atom(job->env, "bad_property"));
         goto send;
     }
 
-    if(JS_TypeOfValue(vm->cx, func) != JSTYPE_FUNCTION)
+    if(JS_TypeOfValue(cx, func) != JSTYPE_FUNCTION)
     {
-        resp = mk_error(job->env, mk_atom(job->env, "not_a_function"));
+        resp = vm_mk_error(job->env, util_mk_atom(job->env, "not_a_function"));
         goto send;
     }
 
@@ -459,31 +350,31 @@ vm_call(vm_ptr vm, job_ptr job)
     {
         if(!enif_get_list_cell(job->env, job->args, &head, &tail))
         {
-            resp = mk_error(job->env, mk_atom(job->env, "invalid_argv"));
+            resp = vm_mk_error(job->env, util_mk_atom(job->env, "invalid_argv"));
             goto send;
         }
 
         argc = 0;
         do {
-            args[argc++] = to_js(job->env, vm->cx, head);
+            args[argc++] = to_js(job->env, cx, head);
         } while(enif_get_list_cell(job->env, tail, &head, &tail) && argc < 256);
     }
 
     // Call function
-    if(!JS_CallFunctionValue(vm->cx, vm->gl, func, argc, args, &rval))
+    if(!JS_CallFunctionValue(cx, gl, func, argc, args, &rval))
     {
         if(job->error != 0)
         {
-            resp = mk_error(job->env, job->error);
+            resp = vm_mk_error(job->env, job->error);
         }
         else
         {
-            resp = mk_error(job->env, mk_atom(job->env, "unknown_error"));
+            resp = vm_mk_error(job->env, util_mk_atom(job->env, "unknown_error"));
         }
     }
     else
     {
-        resp = mk_ok(job->env, to_erl(job->env, vm->cx, rval));
+        resp = vm_mk_ok(job->env, to_erl(job->env, cx, rval));
     }
 
 send:
@@ -500,4 +391,42 @@ vm_set_error(void* obj, ENBINARY mesg, ENBINARY src, unsigned int line)
     ENTERM tline = enif_make_int(job->env, line);
 
     job->error = enif_make_tuple3(job->env, tmesg, tsrc, tline);
+}
+
+void
+vm_report_error(JSContext* cx, const char* mesg, JSErrorReport* report)
+{
+    void* job;
+    ErlNifBinary bmesg;
+    ErlNifBinary bsrc;
+
+    job = JS_GetContextPrivate(cx);
+    if(job == NULL) return;
+
+    if(!(report->flags & JSREPORT_EXCEPTION)) return;
+
+    if(mesg == NULL) mesg = "";
+    if(report->linebuf == NULL) report->linebuf = "";
+
+    if(!enif_alloc_binary(strlen(mesg), &bmesg)) return;
+    if(!enif_alloc_binary(strlen(report->linebuf), &bsrc)) return;
+
+    memcpy(bmesg.data, mesg, strlen(mesg));
+    memcpy(bsrc.data, report->linebuf, strlen(report->linebuf));
+
+    vm_set_error(job, bmesg, bsrc, report->lineno);
+}
+
+ENTERM
+vm_mk_ok(ErlNifEnv* env, ENTERM reason)
+{
+    ENTERM ok = util_mk_atom(env, "ok");
+    return enif_make_tuple2(env, ok, reason);
+}
+
+ENTERM
+vm_mk_error(ErlNifEnv* env, ENTERM reason)
+{
+    ENTERM error = util_mk_atom(env, "error");
+    return enif_make_tuple2(env, error, reason);
 }

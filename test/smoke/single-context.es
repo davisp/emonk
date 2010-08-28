@@ -1,33 +1,47 @@
 #! /usr/bin/env escript
 
 main([]) ->
-    start(64);
+    start(64, 1000);
 main([N]) ->
-    start(list_to_integer(N)).
+    start(list_to_integer(N), 1000);
+main([N, M]) ->
+    start(list_to_integer(N), list_to_integer(M)).
 
-start(N) ->
+
+start(N, M) ->
     code:add_pathz("test"),
     code:add_pathz("ebin"),
-    emonk:add_worker(),
     {ok, Ctx} = emonk:create_ctx(),
     {ok, undefined} = emonk:eval(Ctx, js()),
-    run(Ctx, N).
+    run(Ctx, N, M),
+    wait(N).
 
-run(_, 0) ->
-    timer:sleep(1000),
-    %io:format(standard_error, "pong~n", []),
-    run(nil, 0);
-run(Ctx, N) ->
-    %io:format("Running: ~p~n", [N]),
-    spawn(fun() -> do_js(Ctx) end),
-    run(Ctx, N-1).
+run(_, 0, _) ->
+    ok;
+run(Ctx, N, M) ->
+    Self = self(),
+    Pid = spawn(fun() -> do_js(Self, Ctx, M) end),
+    io:format("Spawned: ~p~n", [Pid]),
+    run(Ctx, N-1, M).
 
-do_js(Ctx) ->
+wait(0) ->
+    ok;
+wait(N) ->
+    receive
+        {finished, Pid} -> ok
+    end,
+    io:format("Finished: ~p~n", [Pid]),
+    wait(N-1).
+
+do_js(Parent, _, 0) ->
+    Parent ! {finished, self()};
+do_js(Parent, Ctx, M) ->
+    io:format("Running: ~p~n", [M]),
     Test = random_test(),
     {ok, [Resp]} = emonk:call(Ctx, <<"f">>, [Test]),
     Sorted = sort(Resp),
     true = Test == Sorted,
-    do_js(Ctx).
+    do_js(Parent, Ctx, M-1).
 
 js() -> 
     <<"var f = function(x) {return [x];};">>.

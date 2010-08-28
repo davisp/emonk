@@ -5,8 +5,8 @@
 
 typedef struct queue_t* queue_ptr;
 
-queue_ptr queue_create(const char* name);
-void queue_destroy(queue_ptr queue, void (*dtor) (void*));
+queue_ptr queue_create();
+void queue_destroy(queue_ptr queue);
 
 int queue_has_item(queue_ptr queue);
 

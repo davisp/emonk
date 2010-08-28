@@ -3,7 +3,6 @@
 -on_load(init/0).
 
 
--export([num_workers/0, add_worker/0, rem_worker/0]).
 -export([create_ctx/0, create_ctx/1]).
 -export([eval/2, eval/3, call/3, call/4]).
 
@@ -12,16 +11,6 @@
 -define(LIBNAME, emonk).
 -define(CTX_STACK, 8192).
 -define(TIMEOUT, infinity).
-
-num_workers() ->
-    not_loaded(?LINE).
-
-add_worker() ->
-    not_loaded(?LINE).
-
-rem_worker() ->
-    not_loaded(?LINE).
-
 
 create_ctx() ->
     create_ctx(?CTX_STACK).
