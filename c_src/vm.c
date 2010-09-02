@@ -132,9 +132,12 @@ jserl_send(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
     env = enif_alloc_env();
     mesg = vm_mk_message(env, to_erl(env, cx, argv[0]));
 
+    // If pid is not alive, raise an error.
+    // XXX: Can I make this uncatchable?
     if(!enif_send(NULL, &(vm->curr_job->pid), env, mesg))
     {
-        assert(0 && "Failed to send message.");
+        JS_ReportError(cx, "Context closing.");
+        return JS_FALSE;
     }
 
     job = queue_receive(vm->jobs);
@@ -306,11 +309,8 @@ vm_run(void* arg)
         JS_EndRequest(cx);
         JS_MaybeGC(cx);
 
-        // XXX: Should we just log this? Or ignore it?
-        if(!enif_send(NULL, &(job->pid), job->env, resp))
-        {
-            assert(0 && "Failed to send response for job.");
-        }
+        // XXX: If pid is not alive, we just ignore it.
+        enif_send(NULL, &(job->pid), job->env, resp);
 
         job_destroy(job);
     }
