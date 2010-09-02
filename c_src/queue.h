@@ -11,8 +11,9 @@ void queue_destroy(queue_ptr queue);
 int queue_has_item(queue_ptr queue);
 
 int queue_push(queue_ptr queue, void* item);
-int queue_sneak(queue_ptr queue, void* item);
 void* queue_pop(queue_ptr queue);
-void* queue_pop_nowait(queue_ptr queue);
+
+int queue_send(queue_ptr queue, void* item);
+void* queue_receive(queue_ptr);
 
 #endif // Included queue.h

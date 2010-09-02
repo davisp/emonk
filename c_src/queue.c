@@ -17,6 +17,7 @@ struct queue_t
     ErlNifCond*         cond;
     qitem_ptr           head;
     qitem_ptr           tail;
+    void*               message;
     int                 length;
 };
 
@@ -32,6 +33,7 @@ queue_create(const char* name)
     ret->cond = NULL;
     ret->head = NULL;
     ret->tail = NULL;
+    ret->message = NULL;
     ret->length = 0;
 
     ret->lock = enif_mutex_create("queue_lock");
@@ -119,39 +121,6 @@ queue_push(queue_ptr queue, void* item)
     return 1;
 }
 
-int
-queue_sneak(queue_ptr queue, void* item)
-{
-    qitem_ptr entry = (qitem_ptr) enif_alloc(sizeof(struct qitem_t));
-    if(entry == NULL) return 0;
-
-    entry->data = item;
-    entry->next = NULL;
-
-    enif_mutex_lock(queue->lock);
-
-    assert(queue->length >= 0 && "Invalid queue size at sneak");
-
-    if(queue->head != NULL)
-    {
-        entry->next = queue->head;
-    }
-
-    queue->head = entry;
-
-    if(queue->tail == NULL)
-    {
-        queue->tail = queue->head;
-    }
-
-    queue->length += 1;
-
-    enif_cond_signal(queue->cond);
-    enif_mutex_unlock(queue->lock);
-
-    return 1;
-}
-
 void*
 queue_pop(queue_ptr queue)
 {
@@ -191,40 +160,34 @@ queue_pop(queue_ptr queue)
     return item;
 }
 
-void*
-queue_pop_nowait(queue_ptr queue)
+int
+queue_send(queue_ptr queue, void* item)
 {
-    qitem_ptr entry;
+    enif_mutex_lock(queue->lock);
+    assert(queue->message == NULL && "Attempting to send multiple messages.");
+    queue->message = item;
+    enif_cond_signal(queue->cond);
+    enif_mutex_unlock(queue->lock);
+    return 1;
+}
+
+void*
+queue_receive(queue_ptr queue)
+{
     void* item;
 
     enif_mutex_lock(queue->lock);
-
-    assert(queue->length >= 0 && "Invalid queue size at pop_nowait.");
-
-    // Nothing available. Bail out.
-    if(queue->head == NULL)
-    {
-        enif_mutex_unlock(queue->lock);
-        return NULL;
-    }
-
-    entry = queue->head;
-    queue->head = entry->next;
-    entry->next = NULL;
     
-    if(queue->head == NULL)
+    // Wait for an item to become available.
+    while(queue->message == NULL)
     {
-        assert(queue->tail == entry && "Invalid queue state: Bad tail.");
-        queue->tail = NULL;
+        enif_cond_wait(queue->cond, queue->lock);
     }
 
-    queue->length -= 1;
-
+    item = queue->message;
+    queue->message = NULL;
+    
     enif_mutex_unlock(queue->lock);
-
-    item = entry->data;
-    enif_free(entry);
-
+    
     return item;
 }
-

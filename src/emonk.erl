@@ -4,7 +4,7 @@
 
 
 -export([create_ctx/0, create_ctx/1]).
--export([eval/2, eval/3, call/3, call/4]).
+-export([eval/2, eval/3, call/3, call/4, send/3, send/4]).
 
 
 -define(APPNAME, emonk).
@@ -24,12 +24,16 @@ eval(Ctx, Script) ->
 
 eval(Ctx, Script, Timeout) ->
     Ref = make_ref(),
-    eval(Ctx, Ref, self(), Script),
+    ok = eval(Ctx, Ref, self(), Script),
     receive
         {Ref, Resp} ->
-            Resp
-        after Timeout ->
-            throw({error, timeout, Ref})
+            Resp;
+        {message, Resp} ->
+            {message, Ref, Resp};
+        Other ->
+            throw(Other)
+    after Timeout ->
+        throw({error, timeout, Ref})
     end.
 
 eval(_Ctx, _Ref, _Dest, _Script) ->
@@ -41,16 +45,36 @@ call(Ctx, Name, Args) ->
 
 call(Ctx, Name, Args, Timeout) ->
     Ref = make_ref(),
-    call(Ctx, Ref, self(), Name, Args),
+    ok = call(Ctx, Ref, self(), Name, Args),
     receive
         {Ref, Resp} ->
-            Resp
-        after Timeout ->
-            throw({error, timeout, Ref})
+            Resp;
+        {message, Resp} ->
+            {message, Ref, Resp}
+    after Timeout ->
+        throw({error, timeout, Ref})
     end.
 
 call(_Ctx, _Ref, _Dest, _Name, _Args) ->
     not_loaded(?LINE).
+
+send(_Ctx, _Data) ->
+    not_loaded(?LINE).
+
+send(Ctx, Ref, Data) ->
+    send(Ctx, Ref, Data, ?TIMEOUT).
+
+send(Ctx, Ref, Data, Timeout) ->
+    ok = send(Ctx, Data),
+    receive
+        {Ref, Resp} ->
+            Resp;
+        {message, Resp} ->
+            {message, Resp}
+    after Timeout ->
+        throw({error, timeout, Ref})
+    end.
+
 
 %% Internal API
 

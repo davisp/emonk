@@ -13,5 +13,6 @@ void vm_destroy(ErlNifEnv* env, void* obj);
 
 int vm_add_eval(vm_ptr vm, ENTERM ref, ENPID pid, ENBINARY bin);
 int vm_add_call(vm_ptr vm, ENTERM ref, ENPID pid, ENTERM name, ENTERM args);
+int vm_send(vm_ptr vm, ENTERM data);
 
 #endif // Included vm.h

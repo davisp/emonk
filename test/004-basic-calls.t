@@ -75,7 +75,7 @@ test_call_undefined(Ctx) ->
 
 test_eval_error(Ctx) ->
     etap:fun_is(
-        fun({error, {_, _, _}}) -> true; (_) -> false end,
+        fun({error, {_, _, _}}) -> true; (_E) -> throw(_E) end,
         emonk:eval(Ctx, <<"f * 3">>),
         "Reported the undefined error."
     ),

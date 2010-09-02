@@ -10,7 +10,8 @@ typedef enum
     job_unknown,
     job_close,
     job_eval,
-    job_call
+    job_call,
+    job_response
 } job_type_e;
 
 struct job_t
@@ -36,6 +37,7 @@ struct vm_t
     ErlNifThreadOpts*   opts;
     JSRuntime*          runtime;
     queue_ptr           jobs;
+    job_ptr             curr_job;
     size_t              stack_size;
     int                 alive;
 };
@@ -60,6 +62,9 @@ ENTERM vm_call(JSContext* cx, JSObject* gl, job_ptr job);
 void vm_report_error(JSContext* cx, const char* mesg, JSErrorReport* report);
 ENTERM vm_mk_ok(ErlNifEnv* env, ENTERM reason);
 ENTERM vm_mk_error(ErlNifEnv* env, ENTERM reason);
+ENTERM vm_mk_message(ErlNifEnv* env, ENTERM data);
+
+// Job constructor and destructor
 
 job_ptr
 job_create()
@@ -93,6 +98,88 @@ job_destroy(void* obj)
     enif_free(job);
 }
 
+// For the erlang global object.
+
+static JSClass jserl_class = {
+    "JSErlang",
+    0,
+    JS_PropertyStub,
+    JS_PropertyStub,
+    JS_PropertyStub,
+    JS_PropertyStub,
+    JS_EnumerateStub,
+    JS_ResolveStub,
+    JS_ConvertStub,
+    JS_FinalizeStub,
+    JSCLASS_NO_OPTIONAL_MEMBERS
+};
+
+static JSBool
+jserl_send(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
+{
+    vm_ptr vm = (vm_ptr) JS_GetContextPrivate(cx);
+    ErlNifEnv* env;
+    job_ptr job;
+    ENTERM mesg;
+    
+    if(argc < 0)
+    {
+        return JS_FALSE;
+    }
+    
+    assert(vm != NULL && "Context has no vm.");
+    
+    env = enif_alloc_env();
+    mesg = vm_mk_message(env, to_erl(env, cx, argv[0]));
+
+    if(!enif_send(NULL, &(vm->curr_job->pid), env, mesg))
+    {
+        assert(0 && "Failed to send message.");
+    }
+
+    job = queue_receive(vm->jobs);
+    if(job->type == job_close)
+    {
+        // XXX: Can I make this uncatchable?
+        job_destroy(job);
+        JS_ReportError(cx, "Context closing.");
+        return JS_FALSE;
+    }
+    
+    assert(job->type == job_response && "Invalid message response.");
+    
+    *rval = to_js(job->env, cx, job->args);
+    job_destroy(job);
+
+    return JS_TRUE;
+}
+
+int
+install_jserl(JSContext* cx, JSObject* gl)
+{
+    JSObject* obj;
+    
+    obj = JS_NewObject(cx, &jserl_class, NULL, NULL);
+    if(obj == NULL)
+    {
+        return 0;
+    }
+    
+    if(!JS_DefineFunction(cx, obj, "send", jserl_send, 1,
+                        JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
+    {
+        return 0;
+    }
+    
+    if(!JS_DefineProperty(cx, gl, "erlang", OBJECT_TO_JSVAL(obj), NULL, NULL,
+                        JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
+    {
+        return 0;
+    }
+    
+    return 1;
+}
+
 //
 //  VM Related API
 //
@@ -104,6 +191,7 @@ vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size)
     if(vm == NULL) return NULL;
 
     vm->runtime = runtime;
+    vm->curr_job = NULL;
     vm->stack_size = stack_size;
 
     vm->jobs = queue_create();
@@ -118,7 +206,7 @@ error:
     enif_release_resource(vm);
     return NULL;
 }
- 
+
 void
 vm_destroy(ErlNifEnv* env, void* obj)
 {
@@ -129,6 +217,7 @@ vm_destroy(ErlNifEnv* env, void* obj)
     assert(job != NULL && "Failed to create job.");
     job->type = job_close;
     queue_push(vm->jobs, job);
+    queue_send(vm->jobs, job);
 
     enif_thread_join(vm->tid, &resp);
     
@@ -175,7 +264,15 @@ vm_run(void* arg)
         fprintf(stderr, "Failed to initialize classes.\n");
         goto done;
     }
+    
+    if(!install_jserl(cx, gl))
+    {
+        fprintf(stderr, "Failed to install erlang object.");
+        goto done;
+    }
+    
     JS_SetErrorReporter(cx, vm_report_error);
+    JS_SetContextPrivate(cx, (void*) vm);
 
     JS_EndRequest(cx);
 
@@ -189,8 +286,9 @@ vm_run(void* arg)
         }
 
         JS_BeginRequest(cx);
-        JS_SetContextPrivate(cx, job);
-        
+        assert(vm->curr_job == NULL && "vm already has a job set.");
+        vm->curr_job = job;
+
         if(job->type == job_eval)
         {
             resp = vm_eval(cx, gl, job);
@@ -204,7 +302,7 @@ vm_run(void* arg)
             assert(0 && "Invalid job type.");
         }
 
-        JS_SetContextPrivate(cx, NULL);
+        vm->curr_job = NULL;
         JS_EndRequest(cx);
         JS_MaybeGC(cx);
 
@@ -258,6 +356,23 @@ vm_add_call(vm_ptr vm, ENTERM ref, ENPID pid, ENTERM name, ENTERM args)
 
     if(!queue_push(vm->jobs, job)) goto error;
 
+    return 1;
+error:
+    if(job != NULL) job_destroy(job);
+    return 0;
+}
+
+int
+vm_send(vm_ptr vm, ENTERM data)
+{
+    job_ptr job = job_create();
+    if(job == NULL) goto error;
+    
+    job->type = job_response;
+    job->args = enif_make_copy(job->env, data);
+    
+    if(!queue_send(vm->jobs, job)) goto error;
+    
     return 1;
 error:
     if(job != NULL) job_destroy(job);
@@ -369,7 +484,7 @@ vm_call(JSContext* cx, JSObject* gl, job_ptr job)
         }
         else
         {
-            resp = vm_mk_error(job->env, util_mk_atom(job->env, "unknown_error"));
+            resp = vm_mk_error(job->env, util_mk_atom(job->env, "unknown"));
         }
     }
     else
@@ -382,26 +497,26 @@ send:
 }
 
 void
-vm_set_error(void* obj, ENBINARY mesg, ENBINARY src, unsigned int line)
+vm_set_error(vm_ptr vm, ENBINARY mesg, ENBINARY src, unsigned int line)
 {
-    job_ptr job = (job_ptr) obj;
+    ENTERM tmesg = enif_make_binary(vm->curr_job->env, &mesg);
+    ENTERM tsrc = enif_make_binary(vm->curr_job->env, &src);
+    ENTERM tline = enif_make_int(vm->curr_job->env, line);
 
-    ENTERM tmesg = enif_make_binary(job->env, &mesg);
-    ENTERM tsrc = enif_make_binary(job->env, &src);
-    ENTERM tline = enif_make_int(job->env, line);
-
-    job->error = enif_make_tuple3(job->env, tmesg, tsrc, tline);
+    vm->curr_job->error = enif_make_tuple3(
+            vm->curr_job->env, tmesg, tsrc, tline
+    );
 }
 
 void
 vm_report_error(JSContext* cx, const char* mesg, JSErrorReport* report)
 {
-    void* job;
+    vm_ptr vm;
     ErlNifBinary bmesg;
     ErlNifBinary bsrc;
 
-    job = JS_GetContextPrivate(cx);
-    if(job == NULL) return;
+    vm = (vm_ptr) JS_GetContextPrivate(cx);
+    if(vm == NULL) return;
 
     if(!(report->flags & JSREPORT_EXCEPTION)) return;
 
@@ -414,7 +529,7 @@ vm_report_error(JSContext* cx, const char* mesg, JSErrorReport* report)
     memcpy(bmesg.data, mesg, strlen(mesg));
     memcpy(bsrc.data, report->linebuf, strlen(report->linebuf));
 
-    vm_set_error(job, bmesg, bsrc, report->lineno);
+    vm_set_error(vm, bmesg, bsrc, report->lineno);
 }
 
 ENTERM
@@ -429,4 +544,11 @@ vm_mk_error(ErlNifEnv* env, ENTERM reason)
 {
     ENTERM error = util_mk_atom(env, "error");
     return enif_make_tuple2(env, error, reason);
+}
+
+ENTERM
+vm_mk_message(ErlNifEnv* env, ENTERM data)
+{
+    ENTERM message = util_mk_atom(env, "message");
+    return enif_make_tuple2(env, message, data);
 }

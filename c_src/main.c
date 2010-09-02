@@ -175,10 +175,32 @@ call(ErlNifEnv* env, int argc, CENTERM argv[])
     return util_mk_atom(env, "ok");
 }
 
+static ENTERM
+send(ErlNifEnv* env, int argc, CENTERM argv[])
+{
+    state_ptr state = (state_ptr) enif_priv_data(env);
+    vm_ptr vm;
+
+    if(argc != 2) return enif_make_badarg(env);
+    
+    if(!enif_get_resource(env, argv[0], state->res_type, (void**) &vm))
+    {
+        return enif_make_badarg(env);
+    }
+
+    if(!vm_send(vm, argv[1]))
+    {
+        return util_mk_error(env, "error_sending_response");
+    }
+    
+    return util_mk_atom(env, "ok");
+}
+
 static ErlNifFunc nif_funcs[] = {
     {"create_ctx", 1, create_ctx},
     {"eval", 4, eval},
-    {"call", 5, call}
+    {"call", 5, call},
+    {"send", 2, send}
 };
 
 ERL_NIF_INIT(emonk, nif_funcs, &load, NULL, NULL, unload);
