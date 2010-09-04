@@ -157,6 +157,61 @@ jserl_send(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
     return JS_TRUE;
 }
 
+static JSBool
+jserl_evalcx(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
+{
+    vm_ptr vm;
+    JSString* str;
+    JSObject* sandbox;
+    JSContext* subcx;
+    const jschar* src;
+    size_t srclen;
+    JSBool ret = JS_FALSE;
+
+    vm = JS_GetContextPrivate(cx);
+    assert(vm != NULL && "Context is missing vm.");
+
+    sandbox = NULL;
+    if(!JS_ConvertArguments(cx, argc, argv, "S / o", &str, &sandbox))
+    {
+        return JS_FALSE;
+    }
+
+    subcx = JS_NewContext(vm->runtime, vm->stack_size);
+    if(!subcx)
+    {
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
+    }
+    
+    JS_SetContextThread(subcx);
+    JS_BeginRequest(subcx);
+
+    src = JS_GetStringChars(str);
+    srclen = JS_GetStringLength(str);
+
+    if(!sandbox)
+    {
+        sandbox = JS_NewObject(subcx, NULL, NULL, NULL);
+        if(!sandbox || !JS_InitStandardClasses(subcx, sandbox)) goto done;
+    }
+    
+    if(srclen == 0)
+    {
+        *rval = OBJECT_TO_JSVAL(sandbox);
+    }
+    else
+    {
+        JS_EvaluateUCScript(subcx, sandbox, src, srclen, NULL, 0, rval);
+    }
+    
+    ret = JS_TRUE;
+
+done:
+    JS_DestroyContext(subcx);
+    return ret;
+}
+
 int
 install_jserl(JSContext* cx, JSObject* gl)
 {
@@ -169,13 +224,19 @@ install_jserl(JSContext* cx, JSObject* gl)
     }
     
     if(!JS_DefineFunction(cx, obj, "send", jserl_send, 1,
-                        JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
+            JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
     {
         return 0;
     }
     
+    if(!JS_DefineFunction(cx, obj, "evalcx", jserl_evalcx, 1,
+            JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
+    {
+        return 0;
+    }
+
     if(!JS_DefineProperty(cx, gl, "erlang", OBJECT_TO_JSVAL(obj), NULL, NULL,
-                        JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
+            JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
     {
         return 0;
     }
