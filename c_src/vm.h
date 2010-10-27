@@ -1,3 +1,6 @@
+// This file is part of Emonk released under the MIT license. 
+// See the LICENSE file for more information.
+
 #ifndef EMONK_VM_H
 #define EMONK_VM_H
 

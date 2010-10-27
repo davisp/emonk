@@ -1,4 +1,6 @@
 #!/usr/bin/env escript
+% This file is part of Emonk released under the MIT license. 
+% See the LICENSE file for more information.
 
 main(_) ->
     code:add_pathz("test"),

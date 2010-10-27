@@ -1,3 +1,6 @@
+% This file is part of Emonk released under the MIT license. 
+% See the LICENSE file for more information.
+
 -module(restarts).
 
 -export([run/0]).
