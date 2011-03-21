@@ -1,20 +1,11 @@
 #!/usr/bin/env escript
+%%! -pa ./test/ -pa ./ebin/
 % This file is part of Emonk released under the MIT license. 
 % See the LICENSE file for more information.
 
 main(_) ->
-    code:add_pathz("test"),
-    code:add_pathz("ebin"),
+    test_util:run(29, fun() -> test() end).
 
-    etap:plan(29),
-    case (catch test()) of
-        ok ->
-            etap:end_tests();
-        Other ->
-            etap:diag(io_lib:format("Test died abnormally: ~p", [Other])),
-            etap:bail()
-    end,
-    ok.
 
 test() ->
     {ok, Ctx} = emonk:create_ctx(),

@@ -1,6 +1,7 @@
 
 TEST_SUPPORT = \
-	test/etap.beam
+	test/etap.beam \
+	test/test_util.beam
 
 %.beam: %.erl
 	erlc -o test/ $<

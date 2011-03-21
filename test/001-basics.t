@@ -1,19 +1,17 @@
-#! /usr/bin/env escript
+#! /usr/bin/env escript 
+%%! -pa ./test/ -pa ./ebin/
 % This file is part of Emonk released under the MIT license. 
 % See the LICENSE file for more information.
 
 main([]) ->
-    code:add_pathz("test"),
-    code:add_pathz("ebin"),
+    test_util:run(length(modules()), fun() -> test() end).
 
-    Modules = [
-        emonk
-    ],
+modules() ->
+    [emonk].
 
-    etap:plan(length(Modules)),
+test() ->
     lists:foreach(fun(Mod) ->
         Mesg = atom_to_list(Mod) ++ " module loaded",
         etap:loaded_ok(Mod, Mesg)
-    end, Modules),
-    etap:end_tests().
+    end, modules()).
 
