@@ -51,7 +51,7 @@ static JSClass global_class = {
     JS_PropertyStub,
     JS_PropertyStub,
     JS_PropertyStub,
-    JS_PropertyStub,
+    JS_StrictPropertyStub,
     JS_EnumerateStub,
     JS_ResolveStub,
     JS_ConvertStub,
@@ -109,7 +109,7 @@ static JSClass jserl_class = {
     JS_PropertyStub,
     JS_PropertyStub,
     JS_PropertyStub,
-    JS_PropertyStub,
+    JS_StrictPropertyStub,
     JS_EnumerateStub,
     JS_ResolveStub,
     JS_ConvertStub,
@@ -118,12 +118,13 @@ static JSClass jserl_class = {
 };
 
 static JSBool
-jserl_send(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
+jserl_send(JSContext* cx, uintN argc, jsval* vp)
 {
     vm_ptr vm = (vm_ptr) JS_GetContextPrivate(cx);
     ErlNifEnv* env;
     job_ptr job;
     ENTERM mesg;
+    jsval* argv = JS_ARGV(cx, vp);
     
     if(argc < 0)
     {
@@ -154,7 +155,7 @@ jserl_send(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
     
     assert(job->type == job_response && "Invalid message response.");
     
-    *rval = to_js(job->env, cx, job->args);
+    JS_SET_RVAL(cx, vp, to_js(job->env, cx, job->args));
     job_destroy(job);
 
     return JS_TRUE;
@@ -257,8 +258,8 @@ vm_run(void* arg)
     flags |= JSOPTION_COMPILE_N_GO;
     flags |= JSOPTION_XML;
     JS_SetOptions(cx, JS_GetOptions(cx) | flags);
-    
-    gl = JS_NewObject(cx, &global_class, NULL, NULL);
+
+    gl = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL);
     if(gl == NULL)
     {
         fprintf(stderr, "Failed to create global object.\n");
@@ -430,7 +431,7 @@ vm_call(JSContext* cx, JSObject* gl, job_ptr job)
     jsval rval;
     jsid idp;
     int argc;
-    
+
     // Get the function object.
     
     func = to_js(job->env, cx, job->name);
