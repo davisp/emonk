@@ -8,6 +8,13 @@
 #define OK 1
 #define ERROR 0
 
+#ifndef JSID_VOID
+#include <js/jsapi.h>
+#define JSID_VOID JSVAL_VOID 
+#endif
+
+
+
 int to_erl_intern(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term);
 
 int

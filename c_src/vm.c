@@ -8,6 +8,7 @@
 #include "util.h"
 #include "vm.h"
 
+
 typedef enum
 {
     job_unknown,
@@ -45,19 +46,25 @@ struct vm_t
     int                 alive;
 };
 
+
 static JSClass global_class = {
     "global",
     JSCLASS_GLOBAL_FLAGS,
     JS_PropertyStub,
     JS_PropertyStub,
     JS_PropertyStub,
+#ifdef JS185
     JS_StrictPropertyStub,
+#else
+    JS_PropertyStub,
+#endif
     JS_EnumerateStub,
     JS_ResolveStub,
     JS_ConvertStub,
     JS_FinalizeStub,
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
+
 
 void* vm_run(void* arg);
 ENTERM vm_eval(JSContext* cx, JSObject* gl, job_ptr job);
@@ -109,7 +116,11 @@ static JSClass jserl_class = {
     JS_PropertyStub,
     JS_PropertyStub,
     JS_PropertyStub,
+#ifdef JS185
     JS_StrictPropertyStub,
+#else
+    JS_PropertyStub,
+#endif
     JS_EnumerateStub,
     JS_ResolveStub,
     JS_ConvertStub,
@@ -117,6 +128,7 @@ static JSClass jserl_class = {
     JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
+#ifdef JS185 
 static JSBool
 jserl_send(JSContext* cx, uintN argc, jsval* vp)
 {
@@ -154,12 +166,54 @@ jserl_send(JSContext* cx, uintN argc, jsval* vp)
     }
     
     assert(job->type == job_response && "Invalid message response.");
-    
     JS_SET_RVAL(cx, vp, to_js(job->env, cx, job->args));
     job_destroy(job);
 
     return JS_TRUE;
 }
+#else
+static JSBool
+jserl_send(JSContext* cx, JSObject* obj, uintN argc, jsval* argv, jsval* rval)
+{
+    vm_ptr vm = (vm_ptr) JS_GetContextPrivate(cx);
+    ErlNifEnv* env;
+    job_ptr job;
+    ENTERM mesg;
+    
+    if(argc < 0)
+    {
+        return JS_FALSE;
+    }
+   
+    assert(vm != NULL && "Context has no vm.");
+    
+    env = enif_alloc_env();
+    mesg = vm_mk_message(env, to_erl(env, cx, argv[0]));
+
+    // If pid is not alive, raise an error.
+    // XXX: Can I make this uncatchable?
+    if(!enif_send(NULL, &(vm->curr_job->pid), env, mesg))
+    {
+        JS_ReportError(cx, "Context closing.");
+        return JS_FALSE;
+    }
+
+    job = queue_receive(vm->jobs);
+    if(job->type == job_close)
+    {
+        // XXX: Can I make this uncatchable?
+        job_destroy(job);
+        JS_ReportError(cx, "Context closing.");
+        return JS_FALSE;
+    }
+    
+    assert(job->type == job_response && "Invalid message response.");
+    *rval = to_js(job->env, cx, job->args);
+    job_destroy(job);
+
+    return JS_TRUE;
+}
+#endif
 
 int
 install_jserl(JSContext* cx, JSObject* gl)
@@ -259,7 +313,11 @@ vm_run(void* arg)
     flags |= JSOPTION_XML;
     JS_SetOptions(cx, JS_GetOptions(cx) | flags);
 
+#ifdef JS185
     gl = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL);
+#else
+    gl = JS_NewObject(cx, &global_class, NULL, NULL);
+#endif
     if(gl == NULL)
     {
         fprintf(stderr, "Failed to create global object.\n");

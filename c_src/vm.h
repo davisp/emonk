@@ -9,6 +9,11 @@
 
 #include "alias.h"
 
+
+#ifdef JS_NewCompartmentAndGlobalObject
+#define JS185 1
+#endif
+
 typedef struct vm_t* vm_ptr;
 
 vm_ptr vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size);
