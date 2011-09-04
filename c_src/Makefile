@@ -52,7 +52,8 @@ ${LIB_DIR}/libjs_static.a: ${LIB_DIR}/libnspr4.a
 					--disable-shared-js \
 					--disable-tests \
 					--with-system-nspr \
-					--with-nspr-prefix=${SYSTEM_DIR} && \
+					--with-nspr-prefix=${SYSTEM_DIR} \
+					--enable-threadsafe && \
 		${GNUMAKE} ${MAKE_ENV} all)
 	mkdir $(INC_DIR)/js
 	cp $(JS_DIR)/js/src/*.h $(INC_DIR)/js
