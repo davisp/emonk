@@ -9,4 +9,5 @@ c_src/system/
 priv
 ebin
 test/*.beam
+libs
 c_src/*.tar.gz
