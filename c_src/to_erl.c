@@ -26,7 +26,7 @@ to_erl_string(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
     size_t len;
 
     str = JS_ValueToString(cx, val);
-    data = JS_GetStringBytesZ(cx, str);
+    data = JS_EncodeString(cx, str);
     if(data == NULL) return ERROR;
     len = strlen(data);
 
@@ -106,7 +106,7 @@ to_erl_object(ErlNifEnv* env, JSContext* cx, JSObject* obj, ERL_NIF_TERM* term)
     length = 0;
     while(JS_NextProperty(cx, iter, &idp))
     {
-        if(idp == JSVAL_VOID) break;
+        if(idp == JSID_VOID) break;
         length += 1;
     }
     
@@ -119,7 +119,7 @@ to_erl_object(ErlNifEnv* env, JSContext* cx, JSObject* obj, ERL_NIF_TERM* term)
     index = 0;
     while(JS_NextProperty(cx, iter, &idp))
     {
-        if(idp == JSVAL_VOID)
+        if(idp == JSID_VOID)
         {
             list = enif_make_list_from_array(env, array, length);
             *term = enif_make_tuple1(env, list);

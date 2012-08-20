@@ -6,8 +6,14 @@ TEST_SUPPORT = \
 %.beam: %.erl
 	erlc -o test/ $<
 
-all:
+all: compile
+
+compile:
+	echo "==> Build emonk & dependencies"
 	./rebar compile
+
+verbose:
+	./rebar compile verbose=1
 
 check: all $(TEST_SUPPORT)
 	prove test/*.t

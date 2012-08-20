@@ -1,3 +1,13 @@
-*.beam
+*.swp
+main.js
+couchjs
 *.o
-*.so
+c_src/js-1.8.5
+c_src/nsprpub/
+c_src/system/
+.DS_Store
+priv
+ebin
+test/*.beam
+libs
+c_src/*.tar.gz
