@@ -1,5 +1,5 @@
 #!/usr/bin/env escript
-%%! -pa ./test/ -pa ./ebin/
+%%! -smp +K true -pa ./test/ -pa ./ebin/
 % This file is part of Emonk released under the MIT license. 
 % See the LICENSE file for more information.
 
